@@ -2,3 +2,5 @@
 *.out
 *.tst
 ._*
+.metals/
+.vscode/
