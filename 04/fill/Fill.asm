@@ -11,4 +11,43 @@
 // 'white' in every pixel;
 // the screen should remain fully clear as long as no key is pressed.
 
-//// Replace this comment with your code.
+//  while (true) {
+//      x = RAM[24576] == 0 ? 0 : -1
+//      for (i=16384, i<24576, i++){
+//      RAM[i] = x
+//      }    
+//  }
+
+(LOOP)
+    @16384
+    D=A
+    @i
+    M=D         // i = 16384
+    @24576
+    D=A
+    @max
+    M=D         // max = 24576
+    @x
+    M=0         // x = 0
+    @24576
+    D=M         // D = RAM[24576]
+    @DRAW
+    D;JEQ       // if (key == 0 ) GOTO DRAW
+    @x
+    M=-1        // x = -1
+(DRAW)
+    @max
+    D=M
+    @i
+    D=D-M       // if (i == 24576)
+    @LOOP
+    D;JEQ       // GOTO LOOP
+    @x
+    D=M
+    @i
+    A=M
+    M=D         // RAM[i] = x
+    @i
+    M=M+1       // i++
+    @DRAW
+    0;JMP
