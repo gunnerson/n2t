@@ -1,6 +1,7 @@
 *.cmp
 *.out
 *.tst
+*.hack
 ._*
 .metals/
 .vscode/
