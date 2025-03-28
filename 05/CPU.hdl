@@ -37,8 +37,7 @@ CHIP CPU {
         out[12]=instrA, 
         out[11]=zx, out[10]=nx, out[9]=zy, out[8]=ny, out[7]=f, out[6]=no, 
         out[5]=dA, out[4]=dD, out[3]=dM, 
-        out[2]=jL, out[1]=jE, out[0]=jG,
-    );
+        out[2]=jL, out[1]=jE, out[0]=jG);
     Mux16(a=instruction, b=outAlu, sel=instruction[15], out=instr);
     
     Not(in=opCode, out=notOpCode);
@@ -52,8 +51,7 @@ CHIP CPU {
     Mux16(a[0..14]=instr2, b=inM, sel=instrA, out=y);
     ALU(x=x, y=y, 
         zx=zx, nx=nx, zy=zy, ny=ny, f=f, no=no,
-        out=outAlu, zr=zr, ng=ng,
-    ); 
+        out=outAlu, zr=zr, ng=ng); 
     And16(a=outAlu, b=true, out=outM);
     And(a=dM, b=opCode, out=writeM);
 
@@ -67,4 +65,4 @@ CHIP CPU {
     Or8Way(in[0]=j1, in[1]=j2, in[3]=j3, in[4]=j4, out=j5);
     And(a=j5, b=opCode, out=loadPc);
     PC(in[0..14]=instr2, load=loadPc, inc=true, reset=reset, out[0..14]=pc);
-};
+}
