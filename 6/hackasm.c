@@ -26,7 +26,6 @@ struct SymbolTable {
 
   void (*addEntry)(struct SymbolTable *table, char *symbol, unsigned address);
   unsigned (*getAddress)(struct SymbolTable *table, char *symbol);
-  void (*dump)(struct SymbolTable *table);
 };
 
 int getBucket(char *symbol, int buckets) {
@@ -78,15 +77,6 @@ unsigned __SymbolTable_get(struct SymbolTable *table, char *symbol) {
   return retval->address;
 }
 
-void __SymbolTable_dump(struct SymbolTable *table) {
-  struct SymbolTableEntry *cur;
-  for (int i = 0; i < table->__buckets; i++) {
-    for (cur = table->__heads[i]; cur != NULL; cur = cur->__next) {
-      printf("\"%s\"=%d,\n", cur->symbol, cur->address);
-    }
-  }
-}
-
 struct SymbolTable *SymbolTable_new() {
   struct SymbolTable *p = malloc(sizeof(*p));
   p->__buckets = N_BUCKETS;
@@ -96,7 +86,6 @@ struct SymbolTable *SymbolTable_new() {
   }
   p->addEntry = &__SymbolTable_add;
   p->getAddress = &__SymbolTable_get;
-  p->dump = &__SymbolTable_dump;
   return p;
 }
 
@@ -114,7 +103,6 @@ void addrToStr(char *str, int num, int bits) {
 // main {{{1
 int main(int argc, char *argv[]) {
   // handle file {{{2
-
   if (argc < 2) {
     printf("Usage: %s <filename>\n", argv[0]);
     return 1;
@@ -126,7 +114,6 @@ int main(int argc, char *argv[]) {
   }
 
   // initialize symbols table {{{2
-
   struct SymbolTable *symbols = SymbolTable_new();
   symbols->addEntry(symbols, "SP", 0);
   symbols->addEntry(symbols, "LCL", 1);
