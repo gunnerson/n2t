@@ -1,9 +1,0 @@
-push temp 0
-push temp 1
-gt
-pop temp 2
-push temp 1
-push temp 0
-gt
-pop temp 3
-
