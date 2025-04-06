@@ -20,6 +20,8 @@
 #define EXIT_ERROR(t)                                                          \
   do {                                                                         \
     fprintf(stderr, "Error on line %zu: %s\n", lineNumber, t);                 \
+    free(file_name);                                                           \
+    free(full_file_name);                                                      \
     fclose(output);                                                            \
     fclose(file);                                                              \
     ht_del(symbols);                                                           \
@@ -469,6 +471,8 @@ int main(int argc, char *argv[]) {
     }
   }
   // }}}2
+  free(file_name);
+  free(full_file_name);
   fclose(output);
   fclose(file);
   ht_del(symbols);
