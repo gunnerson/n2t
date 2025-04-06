@@ -261,7 +261,9 @@ int print_command(char *command, char *arg1, char *arg2, char *file_name,
 int main(int argc, char *argv[]) {
   // handle input {{{2
   FILE *file;
-  char file_name[MAX_LINE_LENGTH] = {0};
+  char *file_name = (char *)malloc(sizeof(char) * (strlen(argv[1]) + 1));
+  char *full_file_name = (char *)malloc(sizeof(char) * (strlen(argv[1]) + 1));
+  size_t last_dot_index = 0;
   if (argc >= 2) {
     file = fopen(argv[1], "r");
     if (file == NULL) {
@@ -273,12 +275,17 @@ int main(int argc, char *argv[]) {
       if (argv[1][i] == '/' || argv[1][i] == '\\')
         last_slash_index = i + 1;
     }
-    for (size_t i = 0; (file_name[i] = argv[1][last_slash_index++]); i++) {
-      if (file_name[i] == '.') {
-        file_name[i] = '\0';
-        break;
+    for (size_t i = 0; (full_file_name[i] = argv[1][i]); i++) {
+      if (full_file_name[i] == '.') {
+        last_dot_index = i;
       }
     }
+    if (last_dot_index > last_slash_index) {
+      full_file_name[last_dot_index] = '\0';
+    }
+    for (size_t i = 0; (file_name[i++] = full_file_name[last_slash_index++]);)
+      ;
+
   } else {
     file = tmpfile();
     if (file == NULL) {
@@ -299,13 +306,14 @@ int main(int argc, char *argv[]) {
       (argc == 2 && !strcmp(argv[1], "-"))) {
     output = stdout;
   } else {
-    char ofname[MAX_LINE_LENGTH + 4] = {0};
-    snprintf(ofname, MAX_LINE_LENGTH + 4, "%s.asm", file_name);
-    output = fopen(ofname, "w");
+    char *of = (char *)malloc(sizeof(char) * (strlen(full_file_name) + 5));
+    snprintf(of, strlen(full_file_name) + 5, "%s.asm", full_file_name);
+    output = fopen(of, "w");
     if (output == NULL) {
       perror("Error opening file");
       return EXIT_FAILURE;
     }
+    free(of);
   }
   // parser {{{2
   fprintf(output, "// %s\n\n", file_name);
@@ -355,6 +363,8 @@ int main(int argc, char *argv[]) {
     }
   }
   // }}}2
+  free(file_name);
+  free(full_file_name);
   fclose(output);
   fclose(file);
   return EXIT_SUCCESS;
