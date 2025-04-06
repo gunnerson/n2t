@@ -1,5 +1,4 @@
 // definitions {{{1
-
 #include <ctype.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -20,13 +19,14 @@
 
 #define EXIT_ERROR(t)                                                          \
   do {                                                                         \
-    printf("Error on line %zu: %s\n", lineNumber, t);                          \
+    fprintf(stderr, "Error on line %zu: %s\n", lineNumber, t);                 \
+    fclose(output);                                                            \
     fclose(file);                                                              \
     ht_del(symbols);                                                           \
     return EXIT_FAILURE;                                                       \
   } while (0)
-
 // hash-table {{{1
+// declarations {{{2
 typedef struct {
   const char *key;
   unsigned value;
@@ -42,7 +42,7 @@ typedef struct {
   ht *_self;
   size_t _index;
 } ht_i;
-
+// ht_new {{{2
 ht *ht_new(void) {
   ht *self = malloc(sizeof(ht));
   if (self == NULL) {
@@ -59,7 +59,7 @@ ht *ht_new(void) {
   }
   return self;
 }
-
+// ht_dump {{{2
 void ht_dump(ht *self) {
   for (size_t i = 0; i < self->capacity; i++) {
     if (self->entries[i].key) {
@@ -68,7 +68,7 @@ void ht_dump(ht *self) {
     }
   }
 }
-
+// ht_del {{{2
 void ht_del(ht *self) {
   for (size_t i = 0; i < self->capacity; i++) {
     free((void *)self->entries[i].key);
@@ -76,7 +76,7 @@ void ht_del(ht *self) {
   free(self->entries);
   free(self);
 }
-
+// _hash {{{2
 static uint64_t _hash(const char *key) {
   uint64_t hash = FNV_OFFSET;
   for (const char *p = key; *p; p++) {
@@ -85,7 +85,7 @@ static uint64_t _hash(const char *key) {
   }
   return hash;
 }
-
+// ht_get {{{2
 unsigned ht_get(ht *self, const char *key) {
   uint64_t hash = _hash(key);
   size_t index = (size_t)(hash & (uint64_t)(self->capacity - 1));
@@ -100,7 +100,7 @@ unsigned ht_get(ht *self, const char *key) {
   }
   return 0;
 }
-
+// _ht_set_entry {{{2
 static const char *_ht_set_entry(ht_entry *entries, size_t capacity,
                                  const char *key, unsigned value,
                                  size_t *length_ptr) {
@@ -128,7 +128,7 @@ static const char *_ht_set_entry(ht_entry *entries, size_t capacity,
   entries[index].value = value;
   return key;
 }
-
+// _ht_expand {{{2
 static bool _ht_expand(ht *self) {
   size_t new_capacity = self->capacity * 2;
   if (new_capacity < self->capacity) {
@@ -150,7 +150,7 @@ static bool _ht_expand(ht *self) {
   self->capacity = new_capacity;
   return true;
 }
-
+// ht_set {{{2
 const char *ht_set(ht *self, const char *key, unsigned value) {
   if (self->length >= self->capacity / 2) {
     if (!_ht_expand(self)) {
@@ -160,16 +160,16 @@ const char *ht_set(ht *self, const char *key, unsigned value) {
   return _ht_set_entry(self->entries, self->capacity, key, value,
                        &self->length);
 }
-
+// ht_len {{{2
 size_t ht_len(ht *self) { return self->length; }
-
+// ht_iter {{{2
 ht_i ht_iter(ht *self) {
   ht_i it;
   it._self = self;
   it._index = 0;
   return it;
 }
-
+// ht_next {{{2
 bool ht_next(ht_i *it) {
   ht *self = it->_self;
   while (it->_index < self->capacity) {
@@ -183,16 +183,27 @@ bool ht_next(ht_i *it) {
   }
   return false;
 }
-
 // main {{{1
 int main(int argc, char *argv[]) {
-  // handle file {{{2
+  // handle input {{{2
   FILE *file;
+  char file_name[MAX_LINE_LENGTH] = {0};
   if (argc >= 2) {
     file = fopen(argv[1], "r");
     if (file == NULL) {
       perror("Error opening file");
       return EXIT_FAILURE;
+    }
+    size_t last_slash_index = 0;
+    for (size_t i = 0; argv[1][i]; i++) {
+      if (argv[1][i] == '/' || argv[1][i] == '\\')
+        last_slash_index = i + 1;
+    }
+    for (size_t i = 0; (file_name[i] = argv[1][last_slash_index++]); i++) {
+      if (file_name[i] == '.') {
+        file_name[i] = '\0';
+        break;
+      }
     }
   } else {
     file = tmpfile();
@@ -206,8 +217,22 @@ int main(int argc, char *argv[]) {
       fwrite(buffer, 1, bytes_read, file);
     }
     rewind(file);
+    strcpy(file_name, "stdin");
   }
-
+  // handle output {{{2
+  FILE *output;
+  if ((argc == 3 && !strcmp(argv[2], "-")) ||
+      (argc == 2 && !strcmp(argv[1], "-"))) {
+    output = stdout;
+  } else {
+    char ofname[MAX_LINE_LENGTH + 5] = {0};
+    snprintf(ofname, MAX_LINE_LENGTH + 5, "%s.hack", file_name);
+    output = fopen(ofname, "w");
+    if (output == NULL) {
+      perror("Error opening file");
+      return EXIT_FAILURE;
+    }
+  }
   // initialize symbols table {{{2
   ht *symbols = ht_new();
   if (symbols == NULL) {
@@ -282,7 +307,6 @@ int main(int argc, char *argv[]) {
   ht_set(symbols, "JNE", 5);
   ht_set(symbols, "JLE", 6);
   ht_set(symbols, "JMP", 7);
-
   // first pass {{{2
   char line[MAX_LINE_LENGTH] = {0};
   unsigned instrNumber = 0;
@@ -336,7 +360,6 @@ int main(int argc, char *argv[]) {
       instrNumber++;
     }
   }
-
   // second pass {{{2
   rewind(file);
   unsigned nextAddress = START_SYMBOL_ADDRESS;
@@ -380,8 +403,7 @@ int main(int argc, char *argv[]) {
           if (c == '=') {
             if (!strcmp(token, "M") || !strcmp(token, "D") ||
                 !strcmp(token, "A")) {
-              strcat(dest, "@");
-              strcat(dest, token);
+              snprintf(dest, MAX_TOKEN_LENGTH, "@%s", token);
             } else
               strcpy(dest, token);
             j = 0;
@@ -415,7 +437,7 @@ int main(int argc, char *argv[]) {
           }
         }
       }
-      printf("%s%015b\n", opcode, addr);
+      fprintf(output, "%s%015b\n", opcode, addr);
 
     } else if (opcode[0] == '1') {
       (hasJump) ? strcpy(jmp, token) : strcpy(comp, token);
@@ -435,10 +457,11 @@ int main(int argc, char *argv[]) {
           EXIT_ERROR("Invalid instruction");
         }
       }
-      printf("%s%07b%03b%03b\n", opcode, comp_d, dest_d, jmp_d);
+      fprintf(output, "%s%07b%03b%03b\n", opcode, comp_d, dest_d, jmp_d);
     }
   }
-
+  // }}}2
+  fclose(output);
   fclose(file);
   ht_del(symbols);
   return EXIT_SUCCESS;

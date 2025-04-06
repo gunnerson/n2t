@@ -2,8 +2,12 @@
 *.out
 *.tst
 *.hack
+*.zip
 ._*
 .metals/
 .vscode/
-*.zip
 .DS_Store
+tools/
+*/bin/
+lang.txt
+src/test*
