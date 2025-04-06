@@ -1,5 +1,3 @@
-push constant 7
-push local 0
-add
-pop local 1
-push constant 42
+push temp 0
+push temp 1
+sub
