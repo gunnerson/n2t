@@ -260,15 +260,29 @@ int print_command(char *command, char *arg1, char *arg2, char *file_name,
 // main {{{1
 int main(int argc, char *argv[]) {
   // handle input {{{2
-  FILE *file;
-  char *file_name = (char *)malloc(sizeof(char) * (strlen(argv[1]) + 1));
-  char *full_file_name = (char *)malloc(sizeof(char) * (strlen(argv[1]) + 1));
+  FILE *file = NULL;
+  char *file_name = NULL;
+  char *full_file_name = NULL;
   size_t last_dot_index = 0;
-  if (argc >= 2) {
+
+  if (argc < 2) {
+    fprintf(stderr, "Usage: %s <input_file> [output_file]\n", argv[0]);
+    return EXIT_FAILURE;
+  }
+
+  if (strcmp(argv[1], "-")) {
     file = fopen(argv[1], "r");
     if (file == NULL) {
       perror("Error opening file");
       return EXIT_FAILURE;
+    }
+    file_name = (char *)malloc(sizeof(char) * (strlen(argv[1]) + 1));
+    if (file_name == NULL) {
+      perror("Failed to allocate memory for file_name");
+    }
+    full_file_name = (char *)malloc(sizeof(char) * (strlen(argv[1]) + 1));
+    if (file_name == NULL) {
+      perror("Failed to allocate memory for full_file_name");
     }
     size_t last_slash_index = 0;
     for (size_t i = 0; argv[1][i]; i++) {
@@ -298,20 +312,30 @@ int main(int argc, char *argv[]) {
       fwrite(buffer, 1, bytes_read, file);
     }
     rewind(file);
+    file_name = (char *)malloc(6 * sizeof(char));
+    if (file_name == NULL) {
+      perror("Failed to allocate memory for file_name");
+    }
     strcpy(file_name, "stdin");
   }
   // handle output {{{2
   FILE *output;
-  if ((argc == 3 && !strcmp(argv[2], "-")) ||
-      (argc == 2 && !strcmp(argv[1], "-"))) {
+  if (argc == 3 && strcmp(argv[2], "-")) {
+    output = fopen(argv[2], "w");
+    if (output == NULL) {
+      perror("Error creating output file");
+    }
+  } else if (argc == 3 || (argc == 2 && !strcmp(argv[1], "-"))) {
     output = stdout;
   } else {
     char *of = (char *)malloc(sizeof(char) * (strlen(full_file_name) + 5));
+    if (file_name == NULL) {
+      perror("Failed to allocate memory for of");
+    }
     snprintf(of, strlen(full_file_name) + 5, "%s.asm", full_file_name);
     output = fopen(of, "w");
     if (output == NULL) {
-      perror("Error opening file");
-      return EXIT_FAILURE;
+      perror("Error creating output file");
     }
     free(of);
   }
@@ -363,8 +387,9 @@ int main(int argc, char *argv[]) {
     }
   }
   // }}}2
+  if (full_file_name)
+    free(full_file_name);
   free(file_name);
-  free(full_file_name);
   fclose(output);
   fclose(file);
   return EXIT_SUCCESS;
