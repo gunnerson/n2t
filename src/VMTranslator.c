@@ -1,6 +1,8 @@
 // definitions {{{1
 #include <ctype.h>
 #include <dirent.h>
+#include <errno.h>
+#include <linux/limits.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -14,7 +16,9 @@
 #define MAX_LINE_LENGTH 128
 #define MAX_TOKEN_LENGTH 16
 #define MAX_CONSTANT 32767
+#define MAX_FILE_NAME 256
 #define DT_REG 8
+#define SLASH '/'
 
 #define EXIT_ERROR(t)                                                          \
   do {                                                                         \
@@ -22,10 +26,23 @@
     return EXIT_FAILURE;                                                       \
   } while (0)
 
-void parse_file(FILE *file, FILE *ofile, char const *fname);
+typedef struct Parser {
+  bool debug;
+  FILE *in;
+  FILE *out;
+  char const *fname;
+  char *command;
+  char *arg1;
+  char *arg2;
+
+  void (*prs_init)(bool debug, FILE *in, FILE *out, char const *fname,
+                   char *command, char *arg1, char *arg2);
+} prs;
+
+void parse_file(FILE *file, FILE *ofile, char const *fname, bool debug);
 int write_command(char const *command, char const *arg1, char const *arg2,
                   char const *fname, size_t const lineNumber, FILE *output);
-
+char *realpath(const char *restrict path, char *restrict resolved_path);
 // main {{{1
 int main(int argc, char *argv[]) {
   if (argc < 2) {
@@ -33,96 +50,109 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
-  struct stat path_stat;
-  if (stat(argv[1], &path_stat) == -1) {
-    perror("Errot getting file attributes");
+  bool debug = false;
+  if (argc >= 3) {
+    for (size_t i = 2; i < argc; i++) {
+      if (!strcmp(argv[i], "-d"))
+        debug = true;
+    }
+  }
+
+  char *path = realpath(argv[1], NULL);
+  if (path == NULL) {
+    perror("Couldn't resolve path");
+    return EXIT_FAILURE;
+  }
+  char *slash = strrchr(path, SLASH);
+  if (slash == NULL) {
+    perror("Error allocating memory");
+    free(path);
     return EXIT_FAILURE;
   }
 
-  if (S_ISREG(path_stat.st_mode)) {
-    FILE *file = fopen(argv[1], "r");
-    if (file) {
-      char *ofname = malloc(strlen(argv[1]) + 5);
-      char *fname = malloc(strlen(argv[1]));
-      if (ofname && fname) {
-        strcpy(ofname, argv[1]);
-        char *dot = strrchr(ofname, '.');
-        if (dot && !strcmp(dot, ".vm")) {
-          *dot = '\0';
-          char *slash = strrchr(ofname, '/');
-          (slash) ? strcpy(fname, slash + 1) : strcpy(fname, ofname);
-          strcpy(dot, ".asm");
-          FILE *ofile = fopen(ofname, "w");
-          if (ofile) {
-            parse_file(file, ofile, fname);
-            fclose(ofile);
-          } else
-            fprintf(stderr, "Error creating output file: %s\n", ofname);
-        } else
-          perror("Invalid file path");
-      } else
-        perror("Failed to allocate memory");
-      if (ofname)
-        free(ofname);
-      if (fname)
-        free(fname);
-    } else {
-      fprintf(stderr, "Error opening file %s\n", argv[1]);
-    }
-    fclose(file);
+  struct stat *path_stat = malloc(sizeof(struct stat));
+  if (path_stat == NULL) {
+    perror("Error allocating memory");
+    free(path);
+    return EXIT_FAILURE;
+  }
+  if (stat(path, path_stat) == -1) {
+    perror("Errot getting file attributes");
+    free(path);
+    return EXIT_FAILURE;
+  }
 
-  } else if (S_ISDIR(path_stat.st_mode)) {
-    DIR *dir = opendir(argv[1]);
-    if (dir == NULL) {
-      perror("Error opening directory");
-      return EXIT_FAILURE;
-    }
-    struct dirent *entry;
-    while ((entry = readdir(dir))) {
-      if (entry->d_type == DT_REG) {
-        char fname[256];
-        strcpy(fname, entry->d_name);
-        char *dot = strrchr(fname, '.');
-        if (dot && !strcmp(dot, ".vm")) {
-          *dot = '\0';
-          char *file_path = malloc(strlen(argv[1]) + strlen(entry->d_name) + 5);
-          if (file_path) {
-            sprintf(file_path,
-                    (argv[1][strlen(argv[1]) - 1] == '/') ? "%s%s" : "%s/%s",
-                    argv[1], entry->d_name);
-            FILE *file = fopen(file_path, "r");
-            if (file) {
-              sprintf(file_path,
-                      (argv[1][strlen(argv[1]) - 1] == '/') ? "%s%s.asm"
-                                                            : "%s/%s.asm",
-                      argv[1], fname);
-              FILE *ofile = fopen(file_path, "w");
-              if (ofile) {
-                parse_file(file, ofile, fname);
-                fclose(ofile);
-              } else
-                fprintf(stderr, "Error creating output file: %s\n", file_path);
-              fclose(file);
+  if (S_ISREG(path_stat->st_mode)) {
+    FILE *file = fopen(path, "r");
+    if (file) {
+      char fname[MAX_FILE_NAME] = {0};
+      char *dot = strrchr(path, '.');
+      if (dot && !strcmp(dot, ".vm")) {
+        *dot = '\0';
+        strncpy(fname, slash + 1, sizeof(fname) - 1);
+        strcpy(dot, ".asm");
+        FILE *ofile = fopen(path, "w");
+        if (ofile) {
+          parse_file(file, ofile, fname, debug);
+          fclose(ofile);
+        } else
+          fprintf(stderr, "Error creating output file: %s\n", path);
+      } else
+        fprintf(stderr, "Invalid file path\n");
+
+      fclose(file);
+    } else
+      perror("Error opening file");
+
+  } else if (S_ISDIR(path_stat->st_mode)) {
+    DIR *dir = opendir(path);
+    if (dir) {
+      struct dirent *entry;
+      char fname[MAX_FILE_NAME] = {0};
+      strncpy(fname, slash + 1, sizeof(fname) - 1);
+      while ((entry = readdir(dir))) {
+        if (entry->d_type == DT_REG) {
+          char *dot = strrchr(entry->d_name, '.');
+          if (dot && !strcmp(dot, ".vm")) {
+            char *file_path = calloc(PATH_MAX, sizeof(char));
+            if (file_path) {
+              snprintf(file_path, PATH_MAX - 1, "%s%c%s", path, SLASH,
+                       entry->d_name);
+              FILE *file = fopen(file_path, "r");
+              if (file) {
+                snprintf(file_path, PATH_MAX - 1, "%s%c%s.asm", path, SLASH,
+                         fname);
+                FILE *ofile = fopen(file_path, "w");
+                if (ofile) {
+                  parse_file(file, ofile, fname, debug);
+                  fclose(ofile);
+                } else
+                  perror("Error opening ofile");
+                fclose(file);
+              } else {
+                perror("Error opening ifile");
+              }
+              free(file_path);
             } else {
-              fprintf(stderr, "Error opening file %s\n", entry->d_name);
+              perror("Error allocating memory");
             }
-            free(file_path);
-          } else {
-            fprintf(stderr, "Memory allocation error while opening file %s\n",
-                    entry->d_name);
           }
         }
       }
-    }
-    closedir(dir);
+      closedir(dir);
+    } else
+      perror("Error opening directory");
   } else {
     perror("Error opening files");
-    return EXIT_FAILURE;
   }
-  return EXIT_SUCCESS;
+  free(path_stat);
+  free(path);
+  return (errno) ? EXIT_FAILURE : EXIT_SUCCESS;
 }
+// cw {{{1
+void cw(FILE *ofile, char const *command, char const *comment, bool debug) {}
 // parse_file {{{1
-void parse_file(FILE *file, FILE *ofile, char const *fname) {
+void parse_file(FILE *file, FILE *ofile, char const *fname, bool debug) {
   fprintf(ofile, "// %s\n\n", fname);
   fprintf(ofile, "// Bootstrap Sys.init\n");
   fprintf(ofile, "@256\n");
