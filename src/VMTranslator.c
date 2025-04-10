@@ -23,8 +23,8 @@
   } while (0)
 
 void parse_file(FILE *file, FILE *ofile, char const *fname);
-int write_command(char *command, char *arg1, char *arg2, char const *fname,
-                  size_t lineNumber, FILE *output);
+int write_command(char const *command, char const *arg1, char const *arg2,
+                  char const *fname, size_t const lineNumber, FILE *output);
 
 // main {{{1
 int main(int argc, char *argv[]) {
@@ -178,8 +178,8 @@ void parse_file(FILE *file, FILE *ofile, char const *fname) {
   }
 }
 // write_command {{{1
-int write_command(char *command, char *arg1, char *arg2, char const *fname,
-                  size_t lineNumber, FILE *output) {
+int write_command(char const *command, char const *arg1, char const *arg2,
+                  char const *fname, size_t const lineNumber, FILE *output) {
   int c = atoi(arg2);
   if (c < 0 || c > MAX_CONSTANT) {
     EXIT_ERROR("Address out of bounds");
