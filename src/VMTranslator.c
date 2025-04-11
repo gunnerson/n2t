@@ -138,12 +138,12 @@ int main(int argc, char *argv[]) {
 void sys_init(FILE *ofile, char const *fname) {
   fprintf(ofile, "// %s\n\n", fname);
   fprintf(ofile, "// Bootstrap Sys.init\n");
-  fprintf(ofile, "@256\n");
-  fprintf(ofile, "D=A\n");
-  fprintf(ofile, "@SP\n");
-  fprintf(ofile, "M=D\n");
-  fprintf(ofile, "@Sys.init\n");
-  fprintf(ofile, "0;JMP\n");
+  fprintf(ofile, "\t@256\n");
+  fprintf(ofile, "\tD=A\n");
+  fprintf(ofile, "\t@SP\n");
+  fprintf(ofile, "\tM=D\n");
+  fprintf(ofile, "\t@Sys.init\n");
+  fprintf(ofile, "\t0;JMP\n");
 }
 // parse_file {{{1
 void parse_file(FILE *file, FILE *ofile, char const *fname) {
@@ -175,8 +175,11 @@ void parse_file(FILE *file, FILE *ofile, char const *fname) {
         if (*c == '/') {
           break;
         }
-      } else {
+      } else if (*c) {
         token[i++] = *c;
+      } else {
+        printf("%s\n", token);
+        break;
       }
     }
 
@@ -426,71 +429,91 @@ int write_command(char const *command, char const *arg1, char const *arg2,
     fprintf(output, "(%s$__endinit__)\n", foo_name);
     // return {{{2
   } else if (!strcmp(command, "return")) {
-    fprintf(output, "@LCL\n");
-    fprintf(output, "D=M\n");
-    fprintf(output, "@R14\n");
-    fprintf(output, "M=D\t\t\t// FRAME = LCL\n");
-    fprintf(output, "@5\n");
-    fprintf(output, "A=D-A\n");
-    fprintf(output, "D=M\n");
-    fprintf(output, "@R15\n");
-    fprintf(output, "M=D\t\t\t// RET = *(FRAME - 5)\n");
-    fprintf(output, "@SP\n");
-    fprintf(output, "AM=M-1\n");
-    fprintf(output, "D=M\n");
-    fprintf(output, "@ARG\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "M=D\t\t\t// *ARG = pop()\n");
-    fprintf(output, "D=A+1\n");
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=D\t\t\t// SP = ARG + 1\n");
-    fprintf(output, "@R14\n");
-    fprintf(output, "AM=M-1\n");
-    fprintf(output, "D=M\n");
-    fprintf(output, "@THAT\n");
-    fprintf(output, "M=D\t\t\t// THAT = *(FRAME - 1)\n");
-    fprintf(output, "@R14\n");
-    fprintf(output, "AM=M-1\n");
-    fprintf(output, "D=M\n");
-    fprintf(output, "@THIS\n");
-    fprintf(output, "M=D\t\t\t// THIS = *(FRAME - 2)\n");
-    fprintf(output, "@R14\n");
-    fprintf(output, "AM=M-1\n");
-    fprintf(output, "D=M\n");
-    fprintf(output, "@ARG\n");
-    fprintf(output, "M=D\t\t\t// ARG = *(FRAME - 3)\n");
-    fprintf(output, "@R14\n");
-    fprintf(output, "AM=M-1\n");
-    fprintf(output, "D=M\n");
-    fprintf(output, "@LCL\n");
-    fprintf(output, "M=D\t\t\t// LCL = *(FRAME - 4)\n");
-    fprintf(output, "@R15\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "0;JMP\t\t// goto RET\n");
+    fprintf(output, "\t@LCL\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@R14\n");
+    fprintf(output, "\tM=D\t\t\t// FRAME = LCL\n");
+    fprintf(output, "\t@5\n");
+    fprintf(output, "\tA=D-A\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@R15\n");
+    fprintf(output, "\tM=D\t\t\t// RET = *(FRAME - 5)\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tAM=M-1\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@ARG\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tM=D\t\t\t// *ARG = pop()\n");
+    fprintf(output, "\tD=A+1\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=D\t\t\t// SP = ARG + 1\n");
+    fprintf(output, "\t@R14\n");
+    fprintf(output, "\tAM=M-1\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@THAT\n");
+    fprintf(output, "\tM=D\t\t\t// THAT = *(FRAME - 1)\n");
+    fprintf(output, "\t@R14\n");
+    fprintf(output, "\tAM=M-1\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@THIS\n");
+    fprintf(output, "\tM=D\t\t\t// THIS = *(FRAME - 2)\n");
+    fprintf(output, "\t@R14\n");
+    fprintf(output, "\tAM=M-1\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@ARG\n");
+    fprintf(output, "\tM=D\t\t\t// ARG = *(FRAME - 3)\n");
+    fprintf(output, "\t@R14\n");
+    fprintf(output, "\tA=M-1\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@LCL\n");
+    fprintf(output, "\tM=D\t\t\t// LCL = *(FRAME - 4)\n");
+    fprintf(output, "\t@R15\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\t0;JMP\t\t// goto RET\n");
     // call {{{2
   } else if (!strcmp(command, "call")) {
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-    fprintf(output, "\n");
-
+    fprintf(output, "\t@%s$__return__\n", foo_name);
+    fprintf(output, "\tD=A\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M+1\n");
+    fprintf(output, "\tA=M-1\n");
+    fprintf(output, "\tM=D\t\t\t// push return-address\n");
+    fprintf(output, "\t@LCL\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M+1\n");
+    fprintf(output, "\tA=M-1\n");
+    fprintf(output, "\tM=D\t\t\t// push LCL\n");
+    fprintf(output, "\t@ARG\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M+1\n");
+    fprintf(output, "\tA=M-1\n");
+    fprintf(output, "\tM=D\t\t\t// push ARG\n");
+    fprintf(output, "\t@THIS\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M+1\n");
+    fprintf(output, "\tA=M-1\n");
+    fprintf(output, "\tM=D\t\t\t// push THIS\n");
+    fprintf(output, "\t@THAT\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M+1\n");
+    fprintf(output, "\tA=M-1\n");
+    fprintf(output, "\tM=D\t\t\t// push THAT\n");
+    fprintf(output, "\tD=A+1\n");
+    fprintf(output, "\t@%d\n", c + 5);
+    fprintf(output, "\tD=D-A\n");
+    fprintf(output, "\t@ARG\n");
+    fprintf(output, "\tM=D\t\t\t// ARG = SP-n-5\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@LCL\n");
+    fprintf(output, "\tM=D\t\t\t// LCL = SP\n");
+    fprintf(output, "\t@%s\n", foo_name);
+    fprintf(output, "\t0;JMP\t\t// goto FOO\n");
+    fprintf(output, "(%s$__return__)\n", foo_name);
     // }}}2
   } else {
     EXIT_ERROR("Invalid command");
