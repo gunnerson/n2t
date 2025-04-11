@@ -1,3 +1,4 @@
+//
 // definitions {{{1
 #include <ctype.h>
 #include <dirent.h>
@@ -14,7 +15,7 @@
 #include <unistd.h>
 
 #define MAX_LINE_LENGTH 128
-#define MAX_TOKEN_LENGTH 16
+#define MAX_SYMBOL_LENGTH 32
 #define MAX_CONSTANT 32767
 #define MAX_FILE_NAME 256
 #define DT_REG 8
@@ -29,7 +30,8 @@
 void sys_init(FILE *ofile, char const *fname);
 void parse_file(FILE *file, FILE *ofile, char const *fname);
 int write_command(char const *command, char const *arg1, char const *arg2,
-                  char const *fname, size_t const lineNumber, FILE *output);
+                  char *foo_name, char const *fname, size_t const lineNumber,
+                  FILE *output);
 extern char *realpath(const char *restrict path, char *restrict resolved_path);
 
 // main {{{1
@@ -71,6 +73,7 @@ int main(int argc, char *argv[]) {
       if (dot && !strcmp(dot, ".vm")) {
         *dot = '\0';
         strncpy(fname, slash + 1, sizeof(fname) - 1);
+        fname[MAX_SYMBOL_LENGTH - 1] = '\0';
         strcpy(dot, ".asm");
         FILE *ofile = fopen(path, "w");
         if (ofile) {
@@ -106,6 +109,7 @@ int main(int argc, char *argv[]) {
                 FILE *file = fopen(file_path, "r");
                 if (file) {
                   *dot = '\0';
+                  entry->d_name[MAX_SYMBOL_LENGTH - 1] = '\0';
                   parse_file(file, ofile, entry->d_name);
                   fclose(file);
                 } else
@@ -144,47 +148,50 @@ void sys_init(FILE *ofile, char const *fname) {
 // parse_file {{{1
 void parse_file(FILE *file, FILE *ofile, char const *fname) {
   fprintf(ofile, "\n// %s\n", fname);
-  char line[MAX_LINE_LENGTH] = {0};
+  char line[MAX_LINE_LENGTH];
+  char foo_name[MAX_SYMBOL_LENGTH];
   for (size_t lineNumber = 1; fgets(line, sizeof(line), file); lineNumber++) {
-    char token[MAX_LINE_LENGTH] = {0};
-    char command[MAX_TOKEN_LENGTH] = {0};
-    char arg1[MAX_TOKEN_LENGTH] = {0};
-    char arg2[MAX_TOKEN_LENGTH] = {0};
-    size_t j = 0;
+    char command[16] = {0};
+    char arg1[MAX_SYMBOL_LENGTH * 2] = "";
+    char arg2[8] = {0};
+    char *c = line;
+    char token[sizeof(arg1)] = "";
 
-    for (size_t i = 0; i < strlen(line); i++) {
-      char c = line[i];
-      if (isspace(c) || c == '/') {
+    for (size_t i = 0; i < MAX_SYMBOL_LENGTH * 2; c++) {
+      if (isspace(*c) || *c == '/' || i == MAX_SYMBOL_LENGTH * 2 - 1) {
         if (*token) {
-          token[j] = '\0';
+          token[i] = '\0';
           if (!*command) {
-            strcpy(command, token);
+            strncpy(command, token, sizeof(command) - 1);
           } else if (!*arg1) {
             strcpy(arg1, token);
           } else {
-            strcpy(arg2, token);
+            strncpy(arg2, token, sizeof(arg2) - 1);
             break;
           }
           *token = '\0';
-          j = 0;
+          i = 0;
         }
-        if (c == '/')
+        if (*c == '/') {
           break;
+        }
       } else {
-        token[j++] = c;
+        token[i++] = *c;
       }
     }
 
     if (*command) {
       fprintf(ofile, "// %s", line);
-      if (write_command(command, arg1, arg2, fname, lineNumber, ofile))
+      if (write_command(command, arg1, arg2, foo_name, fname, lineNumber,
+                        ofile))
         break;
     }
   }
 }
 // write_command {{{1
 int write_command(char const *command, char const *arg1, char const *arg2,
-                  char const *fname, size_t const lineNumber, FILE *output) {
+                  char *foo_name, char const *fname, size_t const lineNumber,
+                  FILE *output) {
   int c = atoi(arg2);
   if (c < 0 || c > MAX_CONSTANT) {
     EXIT_ERROR("Address out of bounds");
@@ -386,6 +393,103 @@ int write_command(char const *command, char const *arg1, char const *arg2,
     fprintf(output, "\t@SP\n");
     fprintf(output, "\tA=M-1\n");
     fprintf(output, "\tM=!M\n");
+    // label {{{2
+  } else if (!strcmp(command, "label")) {
+    fprintf(output, "(%s$%s)\n", foo_name, arg1);
+    // goto {{{2
+  } else if (!strcmp(command, "goto")) {
+    fprintf(output, "\t@%s$%s\n", foo_name, arg1);
+    fprintf(output, "\t0;JMP\n");
+    // if-goto {{{2
+  } else if (!strcmp(command, "if-goto")) {
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tAM=M-1\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@%s$%s\n", foo_name, arg1);
+    fprintf(output, "\tD;JNE\n");
+    // function {{{2
+  } else if (!strcmp(command, "function")) {
+    strcpy(foo_name, arg1);
+    fprintf(output, "(%s)\n", foo_name);
+    fprintf(output, "\t@%s\n", arg2);
+    fprintf(output, "\tD=A\n");
+    fprintf(output, "\t@%s$__endinit__\n", foo_name);
+    fprintf(output, "\tD;JEQ\n");
+    fprintf(output, "(%s$__init__)\n", foo_name);
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M+1\n");
+    fprintf(output, "\tA=M-1\n");
+    fprintf(output, "\tM=0\n");
+    fprintf(output, "\tD=D-1\n");
+    fprintf(output, "\t@%s$__init__\n", foo_name);
+    fprintf(output, "\tD;JGT\n");
+    fprintf(output, "(%s$__endinit__)\n", foo_name);
+    // return {{{2
+  } else if (!strcmp(command, "return")) {
+    fprintf(output, "@LCL\n");
+    fprintf(output, "D=M\n");
+    fprintf(output, "@R14\n");
+    fprintf(output, "M=D\t\t\t// FRAME = LCL\n");
+    fprintf(output, "@5\n");
+    fprintf(output, "A=D-A\n");
+    fprintf(output, "D=M\n");
+    fprintf(output, "@R15\n");
+    fprintf(output, "M=D\t\t\t// RET = *(FRAME - 5)\n");
+    fprintf(output, "@SP\n");
+    fprintf(output, "AM=M-1\n");
+    fprintf(output, "D=M\n");
+    fprintf(output, "@ARG\n");
+    fprintf(output, "A=M\n");
+    fprintf(output, "M=D\t\t\t// *ARG = pop()\n");
+    fprintf(output, "D=A+1\n");
+    fprintf(output, "@SP\n");
+    fprintf(output, "M=D\t\t\t// SP = ARG + 1\n");
+    fprintf(output, "@R14\n");
+    fprintf(output, "AM=M-1\n");
+    fprintf(output, "D=M\n");
+    fprintf(output, "@THAT\n");
+    fprintf(output, "M=D\t\t\t// THAT = *(FRAME - 1)\n");
+    fprintf(output, "@R14\n");
+    fprintf(output, "AM=M-1\n");
+    fprintf(output, "D=M\n");
+    fprintf(output, "@THIS\n");
+    fprintf(output, "M=D\t\t\t// THIS = *(FRAME - 2)\n");
+    fprintf(output, "@R14\n");
+    fprintf(output, "AM=M-1\n");
+    fprintf(output, "D=M\n");
+    fprintf(output, "@ARG\n");
+    fprintf(output, "M=D\t\t\t// ARG = *(FRAME - 3)\n");
+    fprintf(output, "@R14\n");
+    fprintf(output, "AM=M-1\n");
+    fprintf(output, "D=M\n");
+    fprintf(output, "@LCL\n");
+    fprintf(output, "M=D\t\t\t// LCL = *(FRAME - 4)\n");
+    fprintf(output, "@R15\n");
+    fprintf(output, "A=M\n");
+    fprintf(output, "0;JMP\t\t// goto RET\n");
+    // call {{{2
+  } else if (!strcmp(command, "call")) {
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
+    fprintf(output, "\n");
 
     // }}}2
   } else {

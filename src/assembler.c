@@ -1,3 +1,4 @@
+//
 // definitions {{{1
 #include <ctype.h>
 #include <stdbool.h>
