@@ -26,20 +26,8 @@
     return EXIT_FAILURE;                                                       \
   } while (0)
 
-typedef struct Parser {
-  bool debug;
-  FILE *in;
-  FILE *out;
-  char const *fname;
-  char *command;
-  char *arg1;
-  char *arg2;
-
-  void (*prs_init)(bool debug, FILE *in, FILE *out, char const *fname,
-                   char *command, char *arg1, char *arg2);
-} prs;
-
-void parse_file(FILE *file, FILE *ofile, char const *fname, bool debug);
+void sys_init(FILE *ofile, char const *fname);
+void parse_file(FILE *file, FILE *ofile, char const *fname);
 int write_command(char const *command, char const *arg1, char const *arg2,
                   char const *fname, size_t const lineNumber, FILE *output);
 char *realpath(const char *restrict path, char *restrict resolved_path);
@@ -48,14 +36,6 @@ int main(int argc, char *argv[]) {
   if (argc < 2) {
     fprintf(stderr, "Usage: %s <path>\n", argv[0]);
     return EXIT_FAILURE;
-  }
-
-  bool debug = false;
-  if (argc >= 3) {
-    for (size_t i = 2; i < argc; i++) {
-      if (!strcmp(argv[i], "-d"))
-        debug = true;
-    }
   }
 
   char *path = realpath(argv[1], NULL);
@@ -93,7 +73,7 @@ int main(int argc, char *argv[]) {
         strcpy(dot, ".asm");
         FILE *ofile = fopen(path, "w");
         if (ofile) {
-          parse_file(file, ofile, fname, debug);
+          parse_file(file, ofile, fname);
           fclose(ofile);
         } else
           fprintf(stderr, "Error creating output file: %s\n", path);
@@ -108,40 +88,40 @@ int main(int argc, char *argv[]) {
     DIR *dir = opendir(path);
     if (dir) {
       struct dirent *entry;
-      char fname[MAX_FILE_NAME] = {0};
-      strncpy(fname, slash + 1, sizeof(fname) - 1);
-      while ((entry = readdir(dir))) {
-        if (entry->d_type == DT_REG) {
-          char *dot = strrchr(entry->d_name, '.');
-          if (dot && !strcmp(dot, ".vm")) {
-            char *file_path = calloc(PATH_MAX, sizeof(char));
-            if (file_path) {
-              snprintf(file_path, PATH_MAX - 1, "%s%c%s", path, SLASH,
-                       entry->d_name);
-              FILE *file = fopen(file_path, "r");
-              if (file) {
-                snprintf(file_path, PATH_MAX - 1, "%s%c%s.asm", path, SLASH,
-                         fname);
-                FILE *ofile = fopen(file_path, "w");
-                if (ofile) {
-                  parse_file(file, ofile, fname, debug);
-                  fclose(ofile);
+      char dname[MAX_FILE_NAME] = {0};
+      strncpy(dname, slash + 1, sizeof(dname) - 1);
+      char *file_path = calloc(PATH_MAX, sizeof(char));
+      if (file_path) {
+        snprintf(file_path, PATH_MAX - 1, "%s%c%s.asm", path, SLASH, dname);
+        FILE *ofile = fopen(file_path, "w");
+        if (ofile) {
+          sys_init(ofile, dname);
+          while ((entry = readdir(dir))) {
+            if (entry->d_type == DT_REG) {
+              char *dot = strrchr(entry->d_name, '.');
+              if (dot && !strcmp(dot, ".vm")) {
+                snprintf(file_path, PATH_MAX - 1, "%s%c%s", path, SLASH,
+                         entry->d_name);
+                FILE *file = fopen(file_path, "r");
+                if (file) {
+                  *dot = '\0';
+                  parse_file(file, ofile, entry->d_name);
+                  fclose(file);
                 } else
-                  perror("Error opening ofile");
-                fclose(file);
-              } else {
-                perror("Error opening ifile");
+                  perror("Error opening file");
               }
-              free(file_path);
-            } else {
-              perror("Error allocating memory");
             }
           }
-        }
-      }
+          fclose(ofile);
+        } else
+          perror("Error opening out file");
+        free(file_path);
+      } else
+        perror("Error allocating memory");
       closedir(dir);
     } else
       perror("Error opening directory");
+
   } else {
     perror("Error opening files");
   }
@@ -149,22 +129,22 @@ int main(int argc, char *argv[]) {
   free(path);
   return (errno) ? EXIT_FAILURE : EXIT_SUCCESS;
 }
-// cw {{{1
-void cw(FILE *ofile, char const *command, char const *comment, bool debug) {}
-// parse_file {{{1
-void parse_file(FILE *file, FILE *ofile, char const *fname, bool debug) {
+// sys_init {{{1
+void sys_init(FILE *ofile, char const *fname) {
   fprintf(ofile, "// %s\n\n", fname);
   fprintf(ofile, "// Bootstrap Sys.init\n");
   fprintf(ofile, "@256\n");
   fprintf(ofile, "D=A\n");
   fprintf(ofile, "@SP\n");
-  fprintf(ofile, "M=D\t\t// *SP = 256\n");
+  fprintf(ofile, "M=D\n");
   fprintf(ofile, "@Sys.init\n");
   fprintf(ofile, "0;JMP\n");
-
+}
+// parse_file {{{1
+void parse_file(FILE *file, FILE *ofile, char const *fname) {
+  fprintf(ofile, "\n// %s\n", fname);
   char line[MAX_LINE_LENGTH] = {0};
-  for (size_t lineNumber = 1; fgets(line, MAX_LINE_LENGTH, file);
-       lineNumber++) {
+  for (size_t lineNumber = 1; fgets(line, sizeof(line), file); lineNumber++) {
     char token[MAX_LINE_LENGTH] = {0};
     char command[MAX_TOKEN_LENGTH] = {0};
     char arg1[MAX_TOKEN_LENGTH] = {0};
@@ -195,15 +175,9 @@ void parse_file(FILE *file, FILE *ofile, char const *fname, bool debug) {
     }
 
     if (*command) {
-      fprintf(ofile, "// %s", command);
-      if (*arg1)
-        fprintf(ofile, " %s", arg1);
-      if (*arg2)
-        fprintf(ofile, " %s", arg2);
-      fprintf(ofile, "\n");
-      if (write_command(command, arg1, arg2, fname, lineNumber, ofile)) {
+      fprintf(ofile, "// %s", line);
+      if (write_command(command, arg1, arg2, fname, lineNumber, ofile))
         break;
-      }
     }
   }
 }
@@ -217,20 +191,20 @@ int write_command(char const *command, char const *arg1, char const *arg2,
   // push {{{2
   if (!strcmp(command, "push")) {
     if (!strcmp(arg1, "constant")) {
-      fprintf(output, "@%d\n", c);
-      fprintf(output, "D=A\t\t// D = %d\n", c);
+      fprintf(output, "\t@%d\n", c);
+      fprintf(output, "\tD=A\n");
     } else if (!strcmp(arg1, "static")) {
-      fprintf(output, "@%s.%d\n", fname, c);
-      fprintf(output, "D=M\t\t// D = *%s.%d\n", fname, c);
+      fprintf(output, "\t@%s.%d\n", fname, c);
+      fprintf(output, "\tD=M\n");
     } else if (!strcmp(arg1, "temp")) {
-      fprintf(output, "@%d\n", c);
-      fprintf(output, "D=A\t\t// D = %d\n", c);
-      fprintf(output, "@5\n");
-      fprintf(output, "A=D+A\t\t// A += 5\n");
-      fprintf(output, "D=M\t\t// D = *(D + 5)\n");
+      fprintf(output, "\t@%d\n", c);
+      fprintf(output, "\tD=A\n");
+      fprintf(output, "\t@5\n");
+      fprintf(output, "\tA=D+A\n");
+      fprintf(output, "\tD=M\n");
     } else if (!strcmp(arg1, "pointer")) {
-      (c) ? fprintf(output, "@THAT\n") : fprintf(output, "@THIS\n");
-      fprintf(output, "D=M\t\t// D = *(THIS/THAT)\n");
+      (c) ? fprintf(output, "\t@THAT\n") : fprintf(output, "\t@THIS\n");
+      fprintf(output, "D=M\n");
     } else {
       char symbol[5] = {0};
       if (!strcmp(arg1, "local")) {
@@ -244,40 +218,40 @@ int write_command(char const *command, char const *arg1, char const *arg2,
       } else {
         EXIT_ERROR("Invalid segment reference");
       }
-      fprintf(output, "@%d\n", c);
-      fprintf(output, "D=A\t\t// D = %d\n", c);
-      fprintf(output, "@%s\n", symbol);
-      fprintf(output, "A=D+M\t\t// D += %s\n", symbol);
-      fprintf(output, "D=M\t\t// D = *(%s + D)\n", symbol);
+      fprintf(output, "\t@%d\n", c);
+      fprintf(output, "\tD=A\n");
+      fprintf(output, "\t@%s\n", symbol);
+      fprintf(output, "\tA=D+M\n");
+      fprintf(output, "\tD=M\n");
     }
-    fprintf(output, "@SP\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "M=D\t\t// *SP = D\n");
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M+1\t\t// SP++\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tM=D\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M+1\n");
     // pop {{{2
   } else if (!strcmp(command, "pop")) {
     if (!strcmp(arg1, "static")) {
-      fprintf(output, "@SP\n");
-      fprintf(output, "M=M-1\t\t// SP--\n");
-      fprintf(output, "A=M\n");
-      fprintf(output, "D=M\t\t// D = *SP\n");
-      fprintf(output, "@%s.%s\n", fname, arg2);
-      fprintf(output, "M=D\t\t// *%s.%s = D\n", fname, arg2);
+      fprintf(output, "\t@SP\n");
+      fprintf(output, "\tM=M-1\n");
+      fprintf(output, "\tA=M\n");
+      fprintf(output, "\tD=M\n");
+      fprintf(output, "\t@%s.%s\n", fname, arg2);
+      fprintf(output, "\tM=D\n");
     } else if (!strcmp(arg1, "pointer")) {
-      fprintf(output, "@SP\n");
-      fprintf(output, "M=M-1\t\t// SP--\n");
-      fprintf(output, "@SP\n");
-      fprintf(output, "A=M\n");
-      fprintf(output, "D=M\t\t// D = *SP\n");
-      fprintf(output, "@%s\n", (c) ? "THAT" : "THIS");
-      fprintf(output, "M=D\t\t// THIS/THAT = D\n");
+      fprintf(output, "\t@SP\n");
+      fprintf(output, "\tM=M-1\n");
+      fprintf(output, "\t@SP\n");
+      fprintf(output, "\tA=M\n");
+      fprintf(output, "\tD=M\n");
+      fprintf(output, "\t@%s\n", (c) ? "THAT" : "THIS");
+      fprintf(output, "\tM=D\n");
     } else {
       if (!strcmp(arg1, "temp")) {
-        fprintf(output, "@%d\n", c);
-        fprintf(output, "D=A\t\t// D = %d\n", c);
-        fprintf(output, "@5\n");
-        fprintf(output, "D=D+A\t\t// D += 5\n");
+        fprintf(output, "\t@%d\n", c);
+        fprintf(output, "\tD=A\n");
+        fprintf(output, "\t@5\n");
+        fprintf(output, "\tD=D+A\n");
       } else {
         char symbol[5] = {0};
         if (!strcmp(arg1, "local")) {
@@ -291,158 +265,158 @@ int write_command(char const *command, char const *arg1, char const *arg2,
         } else {
           EXIT_ERROR("Invalid segment reference");
         }
-        fprintf(output, "@%d\n", c);
-        fprintf(output, "D=A\t\t// D = %d\n", c);
-        fprintf(output, "@%s\n", symbol);
-        fprintf(output, "D=D+M\t\t// D += %s\n", symbol);
+        fprintf(output, "\t@%d\n", c);
+        fprintf(output, "\tD=A\n");
+        fprintf(output, "\t@%s\n", symbol);
+        fprintf(output, "\tD=D+M\n");
       }
-      fprintf(output, "@R13\n");
-      fprintf(output, "M=D\t\t// R13 = D\n");
-      fprintf(output, "@SP\n");
-      fprintf(output, "M=M-1\t\t// SP--\n");
-      fprintf(output, "@SP\n");
-      fprintf(output, "A=M\n");
-      fprintf(output, "D=M\t\t// D = *SP\n");
-      fprintf(output, "@R13\n");
-      fprintf(output, "A=M\n");
-      fprintf(output, "M=D\t\t// *R13 = D\n");
+      fprintf(output, "\t@R13\n");
+      fprintf(output, "\tM=D\n");
+      fprintf(output, "\t@SP\n");
+      fprintf(output, "\tM=M-1\n");
+      fprintf(output, "\t@SP\n");
+      fprintf(output, "\tA=M\n");
+      fprintf(output, "\tD=M\n");
+      fprintf(output, "\t@R13\n");
+      fprintf(output, "\tA=M\n");
+      fprintf(output, "\tM=D\n");
     }
     // add {{{2
   } else if (!strcmp(command, "add")) {
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M-1\t\t// SP--\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "D=M\t\t// D = *SP\n");
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M-1\t\t// SP--\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "M=D+M\t\t// *SP += D\n");
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M+1\t\t// SP++\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M-1\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M-1\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tM=D+M\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M+1\n");
     // sub {{{2
   } else if (!strcmp(command, "sub")) {
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M-1\t\t// SP--\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "D=M\t\t// D = *SP\n");
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M-1\t\t// SP--\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "M=M-D\t\t// *SP -= D\n");
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M+1\t\t// SP++\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M-1\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M-1\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tM=M-D\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M+1\n");
     // neg {{{2
   } else if (!strcmp(command, "neg")) {
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M-1\t\t// SP--\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "M=-M\t\t// *SP = -(*SP)\n");
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M+1\t\t// SP++\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M-1\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tM=-M\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M+1\n");
     // eq {{{2
   } else if (!strcmp(command, "eq")) {
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M-1\t\t// SP--\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "D=M\t\t// D = *SP\n");
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M-1\t\t// SP--\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "D=M-D\t\t// D = *SP - D\n");
-    fprintf(output, "@EQ_%zu\n", lineNumber);
-    fprintf(output, "D;JEQ\t\t// IF (D = 0) GOTO EQ_%zu\n", lineNumber);
-    fprintf(output, "@SP\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "M=0\t\t// *SP = false\n");
-    fprintf(output, "@CONT_%zu\n", lineNumber);
-    fprintf(output, "0;JMP\t\t// GOTO CONT_%zu\n", lineNumber);
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M-1\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M-1\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tD=M-D\n");
+    fprintf(output, "\t@EQ_%zu\n", lineNumber);
+    fprintf(output, "\tD;JEQ\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tM=0\n");
+    fprintf(output, "\t@CONT_%zu\n", lineNumber);
+    fprintf(output, "\t0;JMP\n");
     fprintf(output, "(EQ_%zu)\n", lineNumber);
-    fprintf(output, "@SP\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "M=-1\t\t// *SP = true\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tM=-1\n");
     fprintf(output, "(CONT_%zu)\n", lineNumber);
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M+1\t\t// SP++\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M+1\n");
     // gt {{{2
   } else if (!strcmp(command, "gt")) {
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M-1\t\t// SP--\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "D=M\t\t// D = *SP\n");
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M-1\t\t// SP--\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "D=M-D\t\t// D = *SP - D\n");
-    fprintf(output, "@GT_%zu\n", lineNumber);
-    fprintf(output, "D;JGT\t\t// IF (D > 0) GOTO GT_%zu\n", lineNumber);
-    fprintf(output, "@SP\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "M=0\t\t// *SP = false\n");
-    fprintf(output, "@CONT_%zu\n", lineNumber);
-    fprintf(output, "0;JMP\t\t// GOTO CONT_%zu\n", lineNumber);
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M-1\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M-1\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tD=M-D\n");
+    fprintf(output, "\t@GT_%zu\n", lineNumber);
+    fprintf(output, "\tD;JGT\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tM=0\n");
+    fprintf(output, "\t@CONT_%zu\n", lineNumber);
+    fprintf(output, "\t0;JMP\n");
     fprintf(output, "(GT_%zu)\n", lineNumber);
-    fprintf(output, "@SP\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "M=-1\t\t// *SP = true\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tM=-1\n");
     fprintf(output, "(CONT_%zu)\n", lineNumber);
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M+1\t\t// SP++\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M+1\n");
     // lt {{{2
   } else if (!strcmp(command, "lt")) {
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M-1\t\t// SP--\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "D=M\t\t// D = *SP\n");
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M-1\t\t// SP--\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "D=M-D\t\t// D = *SP - D\n");
-    fprintf(output, "@LT_%zu\n", lineNumber);
-    fprintf(output, "D;JLT\t\t// IF (D < 0) GOTO LT_%zu\n", lineNumber);
-    fprintf(output, "@SP\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "M=0\t\t// *SP = false\n");
-    fprintf(output, "@CONT_%zu\n", lineNumber);
-    fprintf(output, "0;JMP\t\t// GOTO CONT_%zu\n", lineNumber);
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M-1\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M-1\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tD=M-D\n");
+    fprintf(output, "\t@LT_%zu\n", lineNumber);
+    fprintf(output, "\tD;JLT\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tM=0\n");
+    fprintf(output, "\t@CONT_%zu\n", lineNumber);
+    fprintf(output, "\t0;JMP\n");
     fprintf(output, "(LT_%zu)\n", lineNumber);
-    fprintf(output, "@SP\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "M=-1\t\t// *SP = true\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tM=-1\n");
     fprintf(output, "(CONT_%zu)\n", lineNumber);
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M+1\t\t// SP++\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M+1\n");
     // and {{{2
   } else if (!strcmp(command, "and")) {
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M-1\t\t// SP--\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "D=M\t\t// D = *SP\n");
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M-1\t\t// SP--\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "M=D&M\t\t// *SP = D & M\n");
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M+1\t\t// SP++\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M-1\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M-1\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tM=D&M\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M+1\n");
     // or {{{2
   } else if (!strcmp(command, "or")) {
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M-1\t\t// SP--\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "D=M\t\t// D = *SP\n");
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M-1\t\t// SP--\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "M=D|M\t\t// *SP = D | M\n");
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M+1\t\t// SP++\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M-1\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tD=M\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M-1\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tM=D|M\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M+1\n");
     // not {{{2
   } else if (!strcmp(command, "not")) {
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M-1\t\t// SP--\n");
-    fprintf(output, "A=M\n");
-    fprintf(output, "M=!M\t\t// *SP = !M\n");
-    fprintf(output, "@SP\n");
-    fprintf(output, "M=M+1\t\t// SP++\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M-1\n");
+    fprintf(output, "\tA=M\n");
+    fprintf(output, "\tM=!M\n");
+    fprintf(output, "\t@SP\n");
+    fprintf(output, "\tM=M+1\n");
   } else {
     EXIT_ERROR("Invalid command");
   }
