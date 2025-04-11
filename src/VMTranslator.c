@@ -158,7 +158,8 @@ void parse_file(FILE *file, FILE *ofile, char const *fname) {
     char token[sizeof(arg1)] = "";
 
     for (size_t i = 0; i < MAX_SYMBOL_LENGTH * 2; c++) {
-      if (isspace(*c) || *c == '/' || i == MAX_SYMBOL_LENGTH * 2 - 1) {
+      if (isspace(*c) || *c == '/' || *c == '\0' ||
+          i == MAX_SYMBOL_LENGTH * 2 - 1) {
         if (*token) {
           token[i] = '\0';
           if (!*command) {
@@ -171,15 +172,14 @@ void parse_file(FILE *file, FILE *ofile, char const *fname) {
           }
           *token = '\0';
           i = 0;
+          if (!*c)
+            strcpy(c, "\n\0");
         }
-        if (*c == '/') {
+        if (*c == '/' || *c == '\0') {
           break;
         }
       } else if (*c) {
         token[i++] = *c;
-      } else {
-        printf("%s\n", token);
-        break;
       }
     }
 
@@ -469,7 +469,7 @@ int write_command(char const *command, char const *arg1, char const *arg2,
     fprintf(output, "\tM=D\t\t\t// LCL = *(FRAME - 4)\n");
     fprintf(output, "\t@R15\n");
     fprintf(output, "\tA=M\n");
-    fprintf(output, "\t0;JMP\t\t// goto RET\n");
+    fprintf(output, "\t0;JMP\t\t\t// goto RET\n");
     // call {{{2
   } else if (!strcmp(command, "call")) {
     fprintf(output, "\t@%s$__return__\n", foo_name);
