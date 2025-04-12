@@ -1,6 +1,5 @@
-
 // SimpleFunction
-// function SimpleFunction.test 2
+// [0] function SimpleFunction.test 2
 (SimpleFunction.test)
 	@2
 	D=A
@@ -15,7 +14,7 @@
 	@SimpleFunction.test$__init__
 	D;JGT
 (SimpleFunction.test$__endinit__)
-// 	push local 0
+// [11] push local 0
 	@0
 	D=A
 	@LCL
@@ -25,7 +24,7 @@
 	M=M+1
 	A=M-1
 	M=D
-// 	push local 1
+// [20] push local 1
 	@1
 	D=A
 	@LCL
@@ -35,7 +34,7 @@
 	M=M+1
 	A=M-1
 	M=D
-// 	add
+// [29] add  
 	@SP
 	M=M-1
 	A=M
@@ -46,11 +45,11 @@
 	M=D+M
 	@SP
 	M=M+1
-// 	not
+// [39] not  
 	@SP
 	A=M-1
 	M=!M
-// 	push argument 0
+// [42] push argument 0
 	@0
 	D=A
 	@ARG
@@ -60,7 +59,7 @@
 	M=M+1
 	A=M-1
 	M=D
-// 	add
+// [51] add  
 	@SP
 	M=M-1
 	A=M
@@ -71,7 +70,7 @@
 	M=D+M
 	@SP
 	M=M+1
-// 	push argument 1
+// [61] push argument 1
 	@1
 	D=A
 	@ARG
@@ -81,7 +80,7 @@
 	M=M+1
 	A=M-1
 	M=D
-// 	sub
+// [70] sub  
 	@SP
 	M=M-1
 	A=M
@@ -92,45 +91,46 @@
 	M=M-D
 	@SP
 	M=M+1
-// 	return
+// [80] return  
 	@LCL
 	D=M
 	@R14
-	M=D			// FRAME = LCL
+	M=D
 	@5
 	A=D-A
 	D=M
 	@R15
-	M=D			// RET = *(FRAME - 5)
+	M=D
 	@SP
 	AM=M-1
 	D=M
 	@ARG
 	A=M
-	M=D			// *ARG = pop()
+	M=D
 	D=A+1
 	@SP
-	M=D			// SP = ARG + 1
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THAT
-	M=D			// THAT = *(FRAME - 1)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THIS
-	M=D			// THIS = *(FRAME - 2)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@ARG
-	M=D			// ARG = *(FRAME - 3)
+	M=D
 	@R14
 	A=M-1
 	D=M
 	@LCL
-	M=D			// LCL = *(FRAME - 4)
+	M=D
 	@R15
 	A=M
-	0;JMP			// goto RET
+	0;JMP
+

@@ -5,48 +5,48 @@
 	D=A
 	@SP
 	M=D
-	@Sys.init$__return__
+	@Sys.init$__return_45__
 	D=A
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push return-address
+	M=D
 	@LCL
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push LCL
+	M=D
 	@ARG
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push ARG
+	M=D
 	@THIS
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THIS
+	M=D
 	@THAT
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THAT
+	M=D
 	D=A+1
 	@5
 	D=D-A
 	@ARG
-	M=D			// ARG = SP-n-5
+	M=D
 	@SP
 	D=M
 	@LCL
-	M=D			// LCL = SP
+	M=D
 	@Sys.init
-	0;JMP		// goto FOO
-(Sys.init$__return__)
+	0;JMP
+(Sys.init$__return_45__)
 
 // Sys
 // [45] function Sys.init 0
@@ -105,48 +105,48 @@
 	A=M
 	M=D
 // [92] call Sys.main 0
-	@Sys.main$__return__
+	@Sys.main$__return_133__
 	D=A
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push return-address
+	M=D
 	@LCL
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push LCL
+	M=D
 	@ARG
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push ARG
+	M=D
 	@THIS
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THIS
+	M=D
 	@THAT
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THAT
+	M=D
 	D=A+1
 	@5
 	D=D-A
 	@ARG
-	M=D			// ARG = SP-n-5
+	M=D
 	@SP
 	D=M
 	@LCL
-	M=D			// LCL = SP
+	M=D
 	@Sys.main
-	0;JMP		// goto FOO
-(Sys.main$__return__)
+	0;JMP
+(Sys.main$__return_133__)
 // [133] pop temp 1
 	@1
 	D=A
@@ -288,48 +288,48 @@
 	A=M-1
 	M=D
 // [254] call Sys.add12 1
-	@Sys.add12$__return__
+	@Sys.add12$__return_295__
 	D=A
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push return-address
+	M=D
 	@LCL
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push LCL
+	M=D
 	@ARG
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push ARG
+	M=D
 	@THIS
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THIS
+	M=D
 	@THAT
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THAT
+	M=D
 	D=A+1
 	@6
 	D=D-A
 	@ARG
-	M=D			// ARG = SP-n-5
+	M=D
 	@SP
 	D=M
 	@LCL
-	M=D			// LCL = SP
+	M=D
 	@Sys.add12
-	0;JMP		// goto FOO
-(Sys.add12$__return__)
+	0;JMP
+(Sys.add12$__return_295__)
 // [295] pop temp 0
 	@0
 	D=A
@@ -441,44 +441,44 @@
 	@LCL
 	D=M
 	@R14
-	M=D			// FRAME = LCL
+	M=D
 	@5
 	A=D-A
 	D=M
 	@R15
-	M=D			// RET = *(FRAME - 5)
+	M=D
 	@SP
 	AM=M-1
 	D=M
 	@ARG
 	A=M
-	M=D			// *ARG = pop()
+	M=D
 	D=A+1
 	@SP
-	M=D			// SP = ARG + 1
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THAT
-	M=D			// THAT = *(FRAME - 1)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THIS
-	M=D			// THIS = *(FRAME - 2)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@ARG
-	M=D			// ARG = *(FRAME - 3)
+	M=D
 	@R14
 	A=M-1
 	D=M
 	@LCL
-	M=D			// LCL = *(FRAME - 4)
+	M=D
 	@R15
 	A=M
-	0;JMP			// goto RET
+	0;JMP
 // [433] function Sys.add12 0
 (Sys.add12)
 	@0
@@ -566,42 +566,42 @@
 	@LCL
 	D=M
 	@R14
-	M=D			// FRAME = LCL
+	M=D
 	@5
 	A=D-A
 	D=M
 	@R15
-	M=D			// RET = *(FRAME - 5)
+	M=D
 	@SP
 	AM=M-1
 	D=M
 	@ARG
 	A=M
-	M=D			// *ARG = pop()
+	M=D
 	D=A+1
 	@SP
-	M=D			// SP = ARG + 1
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THAT
-	M=D			// THAT = *(FRAME - 1)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THIS
-	M=D			// THIS = *(FRAME - 2)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@ARG
-	M=D			// ARG = *(FRAME - 3)
+	M=D
 	@R14
 	A=M-1
 	D=M
 	@LCL
-	M=D			// LCL = *(FRAME - 4)
+	M=D
 	@R15
 	A=M
-	0;JMP			// goto RET
+	0;JMP
 

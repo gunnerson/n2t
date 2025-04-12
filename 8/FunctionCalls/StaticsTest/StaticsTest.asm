@@ -5,48 +5,48 @@
 	D=A
 	@SP
 	M=D
-	@Sys.init$__return__
+	@Sys.init$__return_45__
 	D=A
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push return-address
+	M=D
 	@LCL
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push LCL
+	M=D
 	@ARG
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push ARG
+	M=D
 	@THIS
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THIS
+	M=D
 	@THAT
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THAT
+	M=D
 	D=A+1
 	@5
 	D=D-A
 	@ARG
-	M=D			// ARG = SP-n-5
+	M=D
 	@SP
 	D=M
 	@LCL
-	M=D			// LCL = SP
+	M=D
 	@Sys.init
-	0;JMP		// goto FOO
-(Sys.init$__return__)
+	0;JMP
+(Sys.init$__return_45__)
 
 // Class2
 // [45] function Class2.set 0
@@ -107,44 +107,44 @@
 	@LCL
 	D=M
 	@R14
-	M=D			// FRAME = LCL
+	M=D
 	@5
 	A=D-A
 	D=M
 	@R15
-	M=D			// RET = *(FRAME - 5)
+	M=D
 	@SP
 	AM=M-1
 	D=M
 	@ARG
 	A=M
-	M=D			// *ARG = pop()
+	M=D
 	D=A+1
 	@SP
-	M=D			// SP = ARG + 1
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THAT
-	M=D			// THAT = *(FRAME - 1)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THIS
-	M=D			// THIS = *(FRAME - 2)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@ARG
-	M=D			// ARG = *(FRAME - 3)
+	M=D
 	@R14
 	A=M-1
 	D=M
 	@LCL
-	M=D			// LCL = *(FRAME - 4)
+	M=D
 	@R15
 	A=M
-	0;JMP			// goto RET
+	0;JMP
 // [131] function Class2.get 0
 (Class2.get)
 	@0
@@ -189,44 +189,44 @@
 	@LCL
 	D=M
 	@R14
-	M=D			// FRAME = LCL
+	M=D
 	@5
 	A=D-A
 	D=M
 	@R15
-	M=D			// RET = *(FRAME - 5)
+	M=D
 	@SP
 	AM=M-1
 	D=M
 	@ARG
 	A=M
-	M=D			// *ARG = pop()
+	M=D
 	D=A+1
 	@SP
-	M=D			// SP = ARG + 1
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THAT
-	M=D			// THAT = *(FRAME - 1)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THIS
-	M=D			// THIS = *(FRAME - 2)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@ARG
-	M=D			// ARG = *(FRAME - 3)
+	M=D
 	@R14
 	A=M-1
 	D=M
 	@LCL
-	M=D			// LCL = *(FRAME - 4)
+	M=D
 	@R15
 	A=M
-	0;JMP			// goto RET
+	0;JMP
 
 // Sys
 // [205] function Sys.init 0
@@ -259,48 +259,48 @@
 	A=M-1
 	M=D
 // [228] call Class1.set 2
-	@Class1.set$__return__
+	@Class1.set$__return_269__
 	D=A
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push return-address
+	M=D
 	@LCL
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push LCL
+	M=D
 	@ARG
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push ARG
+	M=D
 	@THIS
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THIS
+	M=D
 	@THAT
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THAT
+	M=D
 	D=A+1
 	@7
 	D=D-A
 	@ARG
-	M=D			// ARG = SP-n-5
+	M=D
 	@SP
 	D=M
 	@LCL
-	M=D			// LCL = SP
+	M=D
 	@Class1.set
-	0;JMP		// goto FOO
-(Class1.set$__return__)
+	0;JMP
+(Class1.set$__return_269__)
 // [269] pop temp 0
 	@0
 	D=A
@@ -329,48 +329,48 @@
 	A=M-1
 	M=D
 // [293] call Class2.set 2
-	@Class2.set$__return__
+	@Class2.set$__return_334__
 	D=A
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push return-address
+	M=D
 	@LCL
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push LCL
+	M=D
 	@ARG
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push ARG
+	M=D
 	@THIS
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THIS
+	M=D
 	@THAT
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THAT
+	M=D
 	D=A+1
 	@7
 	D=D-A
 	@ARG
-	M=D			// ARG = SP-n-5
+	M=D
 	@SP
 	D=M
 	@LCL
-	M=D			// LCL = SP
+	M=D
 	@Class2.set
-	0;JMP		// goto FOO
-(Class2.set$__return__)
+	0;JMP
+(Class2.set$__return_334__)
 // [334] pop temp 0
 	@0
 	D=A
@@ -385,91 +385,91 @@
 	A=M
 	M=D
 // [346] call Class1.get 0
-	@Class1.get$__return__
+	@Class1.get$__return_387__
 	D=A
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push return-address
+	M=D
 	@LCL
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push LCL
+	M=D
 	@ARG
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push ARG
+	M=D
 	@THIS
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THIS
+	M=D
 	@THAT
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THAT
+	M=D
 	D=A+1
 	@5
 	D=D-A
 	@ARG
-	M=D			// ARG = SP-n-5
+	M=D
 	@SP
 	D=M
 	@LCL
-	M=D			// LCL = SP
+	M=D
 	@Class1.get
-	0;JMP		// goto FOO
-(Class1.get$__return__)
+	0;JMP
+(Class1.get$__return_387__)
 // [387] call Class2.get 0
-	@Class2.get$__return__
+	@Class2.get$__return_428__
 	D=A
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push return-address
+	M=D
 	@LCL
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push LCL
+	M=D
 	@ARG
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push ARG
+	M=D
 	@THIS
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THIS
+	M=D
 	@THAT
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THAT
+	M=D
 	D=A+1
 	@5
 	D=D-A
 	@ARG
-	M=D			// ARG = SP-n-5
+	M=D
 	@SP
 	D=M
 	@LCL
-	M=D			// LCL = SP
+	M=D
 	@Class2.get
-	0;JMP		// goto FOO
-(Class2.get$__return__)
+	0;JMP
+(Class2.get$__return_428__)
 // [428] label END 
 (Class2.get$END)
 // [428] goto END 
@@ -535,44 +535,44 @@
 	@LCL
 	D=M
 	@R14
-	M=D			// FRAME = LCL
+	M=D
 	@5
 	A=D-A
 	D=M
 	@R15
-	M=D			// RET = *(FRAME - 5)
+	M=D
 	@SP
 	AM=M-1
 	D=M
 	@ARG
 	A=M
-	M=D			// *ARG = pop()
+	M=D
 	D=A+1
 	@SP
-	M=D			// SP = ARG + 1
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THAT
-	M=D			// THAT = *(FRAME - 1)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THIS
-	M=D			// THIS = *(FRAME - 2)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@ARG
-	M=D			// ARG = *(FRAME - 3)
+	M=D
 	@R14
 	A=M-1
 	D=M
 	@LCL
-	M=D			// LCL = *(FRAME - 4)
+	M=D
 	@R15
 	A=M
-	0;JMP			// goto RET
+	0;JMP
 // [516] function Class1.get 0
 (Class1.get)
 	@0
@@ -617,42 +617,42 @@
 	@LCL
 	D=M
 	@R14
-	M=D			// FRAME = LCL
+	M=D
 	@5
 	A=D-A
 	D=M
 	@R15
-	M=D			// RET = *(FRAME - 5)
+	M=D
 	@SP
 	AM=M-1
 	D=M
 	@ARG
 	A=M
-	M=D			// *ARG = pop()
+	M=D
 	D=A+1
 	@SP
-	M=D			// SP = ARG + 1
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THAT
-	M=D			// THAT = *(FRAME - 1)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THIS
-	M=D			// THIS = *(FRAME - 2)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@ARG
-	M=D			// ARG = *(FRAME - 3)
+	M=D
 	@R14
 	A=M-1
 	D=M
 	@LCL
-	M=D			// LCL = *(FRAME - 4)
+	M=D
 	@R15
 	A=M
-	0;JMP			// goto RET
+	0;JMP
 
