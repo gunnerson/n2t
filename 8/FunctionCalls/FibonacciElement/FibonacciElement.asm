@@ -5,48 +5,48 @@
 	D=A
 	@SP
 	M=D
-	@Sys.init$__return_0__
+	@Sys.init$__return_45__
 	D=A
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push return-address
+	M=D
 	@LCL
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push LCL
+	M=D
 	@ARG
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push ARG
+	M=D
 	@THIS
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THIS
+	M=D
 	@THAT
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THAT
+	M=D
 	D=A+1
 	@5
 	D=D-A
 	@ARG
-	M=D			// ARG = SP-n-5
+	M=D
 	@SP
 	D=M
 	@LCL
-	M=D			// LCL = SP
+	M=D
 	@Sys.init
-	0;JMP		// goto FOO
-(Sys.init$__return_0__)
+	0;JMP
+(Sys.init$__return_45__)
 
 // Sys
 // [45] function Sys.init 0
@@ -72,48 +72,48 @@
 	A=M-1
 	M=D
 // [62] call Main.fibonacci 1
-	@Main.fibonacci$__return_16__
+	@Main.fibonacci$__return_103__
 	D=A
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push return-address
+	M=D
 	@LCL
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push LCL
+	M=D
 	@ARG
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push ARG
+	M=D
 	@THIS
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THIS
+	M=D
 	@THAT
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THAT
+	M=D
 	D=A+1
 	@6
 	D=D-A
 	@ARG
-	M=D			// ARG = SP-n-5
+	M=D
 	@SP
 	D=M
 	@LCL
-	M=D			// LCL = SP
+	M=D
 	@Main.fibonacci
-	0;JMP		// goto FOO
-(Main.fibonacci$__return_16__)
+	0;JMP
+(Main.fibonacci$__return_103__)
 // [103] label END 
 (Main.fibonacci$END)
 // [103] goto END 
@@ -199,44 +199,44 @@
 	@LCL
 	D=M
 	@R14
-	M=D			// FRAME = LCL
+	M=D
 	@5
 	A=D-A
 	D=M
 	@R15
-	M=D			// RET = *(FRAME - 5)
+	M=D
 	@SP
 	AM=M-1
 	D=M
 	@ARG
 	A=M
-	M=D			// *ARG = pop()
+	M=D
 	D=A+1
 	@SP
-	M=D			// SP = ARG + 1
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THAT
-	M=D			// THAT = *(FRAME - 1)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THIS
-	M=D			// THIS = *(FRAME - 2)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@ARG
-	M=D			// ARG = *(FRAME - 3)
+	M=D
 	@R14
 	A=M-1
 	D=M
 	@LCL
-	M=D			// LCL = *(FRAME - 4)
+	M=D
 	@R15
 	A=M
-	0;JMP			// goto RET
+	0;JMP
 // [206] label N_GE_2 
 (Main.fibonacci$N_GE_2)
 // [206] push argument 0
@@ -268,48 +268,48 @@
 	@SP
 	M=M+1
 // [231] call Main.fibonacci 1
-	@Main.fibonacci$__return_25__
+	@Main.fibonacci$__return_272__
 	D=A
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push return-address
+	M=D
 	@LCL
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push LCL
+	M=D
 	@ARG
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push ARG
+	M=D
 	@THIS
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THIS
+	M=D
 	@THAT
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THAT
+	M=D
 	D=A+1
 	@6
 	D=D-A
 	@ARG
-	M=D			// ARG = SP-n-5
+	M=D
 	@SP
 	D=M
 	@LCL
-	M=D			// LCL = SP
+	M=D
 	@Main.fibonacci
-	0;JMP		// goto FOO
-(Main.fibonacci$__return_25__)
+	0;JMP
+(Main.fibonacci$__return_272__)
 // [272] push argument 0
 	@0
 	D=A
@@ -339,48 +339,48 @@
 	@SP
 	M=M+1
 // [297] call Main.fibonacci 1
-	@Main.fibonacci$__return_29__
+	@Main.fibonacci$__return_338__
 	D=A
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push return-address
+	M=D
 	@LCL
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push LCL
+	M=D
 	@ARG
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push ARG
+	M=D
 	@THIS
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THIS
+	M=D
 	@THAT
 	D=M
 	@SP
 	M=M+1
 	A=M-1
-	M=D			// push THAT
+	M=D
 	D=A+1
 	@6
 	D=D-A
 	@ARG
-	M=D			// ARG = SP-n-5
+	M=D
 	@SP
 	D=M
 	@LCL
-	M=D			// LCL = SP
+	M=D
 	@Main.fibonacci
-	0;JMP		// goto FOO
-(Main.fibonacci$__return_29__)
+	0;JMP
+(Main.fibonacci$__return_338__)
 // [338] add  
 	@SP
 	M=M-1
@@ -396,42 +396,42 @@
 	@LCL
 	D=M
 	@R14
-	M=D			// FRAME = LCL
+	M=D
 	@5
 	A=D-A
 	D=M
 	@R15
-	M=D			// RET = *(FRAME - 5)
+	M=D
 	@SP
 	AM=M-1
 	D=M
 	@ARG
 	A=M
-	M=D			// *ARG = pop()
+	M=D
 	D=A+1
 	@SP
-	M=D			// SP = ARG + 1
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THAT
-	M=D			// THAT = *(FRAME - 1)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@THIS
-	M=D			// THIS = *(FRAME - 2)
+	M=D
 	@R14
 	AM=M-1
 	D=M
 	@ARG
-	M=D			// ARG = *(FRAME - 3)
+	M=D
 	@R14
 	A=M-1
 	D=M
 	@LCL
-	M=D			// LCL = *(FRAME - 4)
+	M=D
 	@R15
 	A=M
-	0;JMP			// goto RET
+	0;JMP
 

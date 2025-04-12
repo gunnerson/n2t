@@ -1,6 +1,7 @@
 //
 // definitions {{{1
 #include <ctype.h>
+#include <linux/limits.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -9,7 +10,8 @@
 #include <string.h>
 
 #define MAX_LINE_LENGTH 128
-#define MAX_TOKEN_LENGTH 4
+#define MAX_FILE_NAME 256
+#define MAX_TOKEN_LENGTH 8
 #define START_SYMBOL_ADDRESS 16U
 #define SCREEN_ADDRESS 16384U
 #define KEYBOARD_ADDRESS 24576U
@@ -21,14 +23,14 @@
 #define EXIT_ERROR(t)                                                          \
   do {                                                                         \
     fprintf(stderr, "Error on line %zu: %s\n", lineNumber, t);                 \
-    if (full_file_name)                                                        \
-      free(full_file_name);                                                    \
-    free(file_name);                                                           \
     fclose(output);                                                            \
     fclose(file);                                                              \
+    free(path);                                                                \
     ht_del(symbols);                                                           \
     return EXIT_FAILURE;                                                       \
   } while (0)
+
+extern char *realpath(const char *restrict path, char *restrict resolved_path);
 // hash-table {{{1
 // declarations {{{2
 typedef struct {
@@ -67,8 +69,8 @@ ht *ht_new(void) {
 void ht_dump(ht *self) {
   for (size_t i = 0; i < self->capacity; i++) {
     if (self->entries[i].key) {
-      printf("%s\t%d\t%016b\n", self->entries[i].key, self->entries[i].value,
-             self->entries[i].value);
+      printf("%d\t%016b\t%s\n", self->entries[i].value, self->entries[i].value,
+             self->entries[i].key);
     }
   }
 }
@@ -80,8 +82,8 @@ void ht_del(ht *self) {
   free(self->entries);
   free(self);
 }
-// _hash {{{2
-static uint64_t _hash(const char *key) {
+// ht_hash {{{2
+static uint64_t ht_hash(const char *key) {
   uint64_t hash = FNV_OFFSET;
   for (const char *p = key; *p; p++) {
     hash ^= (uint64_t)(unsigned char)(*p);
@@ -91,7 +93,7 @@ static uint64_t _hash(const char *key) {
 }
 // ht_get {{{2
 unsigned ht_get(ht *self, const char *key) {
-  uint64_t hash = _hash(key);
+  uint64_t hash = ht_hash(key);
   size_t index = (size_t)(hash & (uint64_t)(self->capacity - 1));
   while (self->entries[index].key != NULL) {
     if (strcmp(key, self->entries[index].key) == 0) {
@@ -104,11 +106,11 @@ unsigned ht_get(ht *self, const char *key) {
   }
   return 0;
 }
-// _ht_set_entry {{{2
-static const char *_ht_set_entry(ht_entry *entries, size_t capacity,
-                                 const char *key, unsigned value,
-                                 size_t *length_ptr) {
-  uint64_t hash = _hash(key);
+// ht_set_entry {{{2
+static const char *ht_set_entry(ht_entry *entries, size_t capacity,
+                                const char *key, unsigned value,
+                                size_t *length_ptr) {
+  uint64_t hash = ht_hash(key);
   size_t index = (size_t)(hash & (uint64_t)(capacity - 1));
   while (entries[index].key != NULL) {
     if (strcmp(key, entries[index].key) == 0) {
@@ -132,8 +134,8 @@ static const char *_ht_set_entry(ht_entry *entries, size_t capacity,
   entries[index].value = value;
   return key;
 }
-// _ht_expand {{{2
-static bool _ht_expand(ht *self) {
+// ht_expand {{{2
+static bool ht_expand(ht *self) {
   size_t new_capacity = self->capacity * 2;
   if (new_capacity < self->capacity) {
     return false;
@@ -146,7 +148,7 @@ static bool _ht_expand(ht *self) {
   for (size_t i = 0; i < self->capacity; i++) {
     ht_entry entry = self->entries[i];
     if (entry.key != NULL) {
-      _ht_set_entry(new_entries, new_capacity, entry.key, entry.value, NULL);
+      ht_set_entry(new_entries, new_capacity, entry.key, entry.value, NULL);
     }
   }
   free(self->entries);
@@ -157,12 +159,11 @@ static bool _ht_expand(ht *self) {
 // ht_set {{{2
 const char *ht_set(ht *self, const char *key, unsigned value) {
   if (self->length >= self->capacity / 2) {
-    if (!_ht_expand(self)) {
+    if (!ht_expand(self)) {
       return NULL;
     }
   }
-  return _ht_set_entry(self->entries, self->capacity, key, value,
-                       &self->length);
+  return ht_set_entry(self->entries, self->capacity, key, value, &self->length);
 }
 // ht_len {{{2
 size_t ht_len(ht *self) { return self->length; }
@@ -189,85 +190,33 @@ bool ht_next(ht_i *it) {
 }
 // main {{{1
 int main(int argc, char *argv[]) {
-  // handle input {{{2
-  FILE *file = NULL;
-  char *file_name = NULL;
-  char *full_file_name = NULL;
-  size_t last_dot_index = 0;
-
+  // handle input/output {{{2
   if (argc < 2) {
-    fprintf(stderr, "Usage: %s <input_file> [output_file]\n", argv[0]);
+    fprintf(stderr, "Usage: %s <file>\n", argv[0]);
     return EXIT_FAILURE;
   }
 
-  if (strcmp(argv[1], "-")) {
-    file = fopen(argv[1], "r");
-    if (file == NULL) {
-      perror("Error opening file");
-      return EXIT_FAILURE;
-    }
-    file_name = (char *)malloc(sizeof(char) * (strlen(argv[1]) + 1));
-    if (file_name == NULL) {
-      perror("Failed to allocate memory for file_name");
-    }
-    full_file_name = (char *)malloc(sizeof(char) * (strlen(argv[1]) + 1));
-    if (file_name == NULL) {
-      perror("Failed to allocate memory for full_file_name");
-    }
-    size_t last_slash_index = 0;
-    for (size_t i = 0; argv[1][i]; i++) {
-      if (argv[1][i] == '/' || argv[1][i] == '\\')
-        last_slash_index = i + 1;
-    }
-    for (size_t i = 0; (full_file_name[i] = argv[1][i]); i++) {
-      if (full_file_name[i] == '.') {
-        last_dot_index = i;
-      }
-    }
-    if (last_dot_index > last_slash_index) {
-      full_file_name[last_dot_index] = '\0';
-    }
-    for (size_t i = 0; (file_name[i++] = full_file_name[last_slash_index++]);)
-      ;
-
-  } else {
-    file = tmpfile();
-    if (file == NULL) {
-      perror("Error creating temporary file");
-      return EXIT_FAILURE;
-    }
-    char buffer[256];
-    size_t bytes_read;
-    while ((bytes_read = fread(buffer, 1, sizeof(buffer), stdin)) > 0) {
-      fwrite(buffer, 1, bytes_read, file);
-    }
-    rewind(file);
-    file_name = (char *)malloc(6 * sizeof(char));
-    if (file_name == NULL) {
-      perror("Failed to allocate memory for file_name");
-    }
-    strcpy(file_name, "stdin");
+  char *path = malloc(PATH_MAX);
+  if (path == NULL)
+    return EXIT_FAILURE;
+  realpath(argv[1], path);
+  char *dot = strrchr(path, '.');
+  if (path == NULL || dot == NULL) {
+    free(path);
+    return EXIT_FAILURE;
   }
-  // handle output {{{2
-  FILE *output;
-  if (argc == 3 && strcmp(argv[2], "-")) {
-    output = fopen(argv[2], "w");
-    if (output == NULL) {
-      perror("Error creating output file");
-    }
-  } else if (argc == 3 || (argc == 2 && !strcmp(argv[1], "-"))) {
-    output = stdout;
-  } else {
-    char *of = (char *)malloc(sizeof(char) * (strlen(full_file_name) + 6));
-    if (file_name == NULL) {
-      perror("Failed to allocate memory for of");
-    }
-    snprintf(of, strlen(full_file_name) + 6, "%s.hack", full_file_name);
-    output = fopen(of, "w");
-    if (output == NULL) {
-      perror("Error creating output file");
-    }
-    free(of);
+
+  FILE *file = fopen(path, "r");
+  if (file == NULL) {
+    free(path);
+    return EXIT_FAILURE;
+  }
+
+  strcpy(dot, ".hack");
+  FILE *output = fopen(path, "w");
+  if (output == NULL) {
+    fclose(file);
+    return EXIT_FAILURE;
   }
   // initialize symbols table {{{2
   ht *symbols = ht_new();
@@ -368,12 +317,10 @@ int main(int argc, char *argv[]) {
         EXIT_ERROR("Invalid label");
       }
 
-      if (c == '/')
-        break;
-      if (c == '\r' || c == '\n' || c == '\t') {
+      if (c == '\r' || c == '\n' || c == '/') {
         break;
       }
-      if (c == ' ')
+      if (c == ' ' || c == '\t')
         continue;
       if (c == '(') {
         isLabel = true;
@@ -417,10 +364,10 @@ int main(int argc, char *argv[]) {
     for (size_t i = 0; i < strlen(line); i++) {
       char c = line[i];
 
-      if (c == '/' || c == '\r' || c == '\n' || c == '\t' || c == '(')
+      if (c == '/' || c == '\r' || c == '\n' || c == '(')
         break;
       if (!*opcode) {
-        if (c == ' ')
+        if (c == ' ' || c == '\t')
           continue;
         if (c == '@') {
           strcpy(opcode, "0");
@@ -430,7 +377,7 @@ int main(int argc, char *argv[]) {
         }
 
       } else {
-        if (c == ' ')
+        if (isspace(c))
           break;
         if (opcode[0] == '0') {
           aInstr[j++] = c;
@@ -497,11 +444,9 @@ int main(int argc, char *argv[]) {
     }
   }
   // }}}2
-  if (full_file_name)
-    free(full_file_name);
-  free(file_name);
   fclose(output);
   fclose(file);
+  free(path);
   ht_del(symbols);
   return EXIT_SUCCESS;
 }
