@@ -22,6 +22,8 @@
 #define DT_UNKNOWN 0
 #define SLASH '/'
 
+#define STACK_ADDRESS 256U
+
 #define EXIT_ERROR(t)                                                          \
   do {                                                                         \
     fprintf(stderr, "Error on line %zu: %s\n", lineNumber, t);                 \
@@ -148,7 +150,7 @@ int main(int argc, char *argv[]) {
 void sys_init(FILE *output, char const *fname) {
   fprintf(output, "// %s\n\n", fname);
   fprintf(output, "// [0] Bootstrap Sys.init\n");
-  fprintf(output, "\t@256\n");
+  fprintf(output, "\t@%u\n", STACK_ADDRESS);
   fprintf(output, "\tD=A\n");
   fprintf(output, "\t@SP\n");
   fprintf(output, "\tM=D\n");
@@ -160,9 +162,9 @@ void parse_file(FILE *file, FILE *ofile, char const *fname,
   char line[MAX_LINE_LENGTH];
   char foo_name[MAX_SYMBOL_LENGTH];
   for (size_t lineNumber = 1; fgets(line, sizeof(line), file); lineNumber++) {
-    char command[16] = {0};
+    char command[MAX_SYMBOL_LENGTH] = {0};
     char arg1[MAX_SYMBOL_LENGTH * 2] = "";
-    char arg2[8] = {0};
+    char arg2[MAX_SYMBOL_LENGTH] = {0};
     char *c = line;
     char token[sizeof(arg1)] = "";
 

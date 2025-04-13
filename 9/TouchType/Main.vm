@@ -1,0 +1,26 @@
+function Main.main 1
+    call TouchType.new 0
+    pop local 0
+label Main_0
+    push local 0
+    call TouchType.getExit 1
+    push constant 0
+    eq
+    not
+    if-goto Main_1
+    push local 0
+    call TouchType.setup 1
+    pop temp 0
+    push local 0
+    call TouchType.run 1
+    pop temp 0
+    push local 0
+    call TouchType.score 1
+    pop temp 0
+    goto Main_0
+label Main_1
+    push local 0
+    call TouchType.dispose 1
+    pop temp 0
+    push constant 0
+    return

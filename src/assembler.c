@@ -12,13 +12,14 @@
 #define MAX_LINE_LENGTH 128
 #define MAX_FILE_NAME 256
 #define MAX_TOKEN_LENGTH 8
+#define INITIAL_CAPACITY 16
+#define FNV_OFFSET 14695981039346656037UL
+#define FNV_PRIME 1099511628211UL
+
 #define START_SYMBOL_ADDRESS 16U
 #define SCREEN_ADDRESS 16384U
 #define KEYBOARD_ADDRESS 24576U
 #define MAX_ADDRESS 32767U
-#define INITIAL_CAPACITY 16
-#define FNV_OFFSET 14695981039346656037UL
-#define FNV_PRIME 1099511628211UL
 
 #define EXIT_ERROR(t)                                                          \
   do {                                                                         \

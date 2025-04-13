@@ -485,7 +485,6 @@ int write_command(char const *command, char const *arg1, char const *arg2,
     fprintf(output, "\t@%s\n", foo_name);
     fprintf(output, "\t0;JMP\n");
     fprintf(output, "(%s$__return_%u__)\n", foo_name, *commandNumber);
-    // }}}2
     // function {{{2
   } else if (!strcmp(command, "function")) {
     strcpy(foo_name, arg1);
@@ -548,6 +547,7 @@ int write_command(char const *command, char const *arg1, char const *arg2,
     fprintf(output, "\t@R15\n");
     fprintf(output, "\tA=M\n");
     fprintf(output, "\t0;JMP\n");
+    // }}}2
   } else {
     EXIT_ERROR("Invalid command");
   }

@@ -1,0 +1,132 @@
+class TouchType {
+    field int score;
+    field int length;
+    field boolean exit;
+
+    constructor TouchType new() {
+        let exit = false;
+        return this;
+    }
+
+    method boolean getExit () {
+        return exit;
+    }
+
+    method void setup() {
+        do Screen.clearScreen();
+        do Output.moveCursor(10,17);
+        let length = Keyboard.readInt("Enter test length (1-445): ");
+        let length = Math.min(445, length);
+        let length = Math.max(1, length);
+        do Sys.wait(500);
+        return;
+    }
+
+    method void run() {
+        var char key;
+        var int error;      // Wrong key was pressed
+        var String s;       // Main string
+        var String e;       // Eraser string
+        var char c;
+        var int i;
+        var int x;
+        var int y;
+
+        let i = 0;
+        let e = String.new(8);
+        let e = "        ";
+        let s = String.new(445);
+        let s = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.";
+        let score = length * 10;
+
+        do Screen.clearScreen();
+        do Output.moveCursor(6,0);
+        while (i < length){
+            do Output.printChar(s.charAt(i));
+            let i = i + 1;
+        }
+        do Output.moveCursor(21,0);
+        do Output.printString("================================================================");
+        do Output.moveCursor(22,0);
+        do Output.printString("SCORE: ");
+        do Output.moveCursor(22,43);
+        do Output.printString("Press SHIFT+Q to exit");
+
+        let i = 0;
+        while ((~exit) & (score > 0) & (i < length)) {
+            // Update score while waiting for key press
+            while ((key = 0) & (score > 0)) { 
+                let key = Keyboard.keyPressed(); 
+                let score = score - 1;
+                do Output.moveCursor(22,7);
+                do Output.printString(e);
+                do Output.moveCursor(22,7);
+                do Output.printInt(score);
+                do Sys.wait(100);
+            }
+
+            if (key = 81) { 
+                let exit = true; 
+                let score = 0;
+            } // Q to exit
+
+            // If key is correct replace char with blank and advance cursor
+            let error = 1;
+            if (key = s.charAt(i)) {
+                let error = 0;
+                let x = Math.divide(i, 64);
+                let y = i - (x * 64);
+                do Output.moveCursor(x+6,y);
+                do Output.printChar(" ");
+                let i = i + 1;
+            }
+
+            // Update score while waiting for key release
+            while (~(key = 0) & (score > 0)) { 
+                let key = Keyboard.keyPressed();
+                let score = score - 1;
+                do Output.moveCursor(22,7);
+                do Output.printString(e);
+                do Output.moveCursor(22,7);
+                do Output.printInt(score);
+                do Sys.wait(100);
+            }
+
+            // Apply penalty for wrong key
+            let score = Math.max(0, score - (error * 10));
+        }
+
+        do e.dispose();
+        do s.dispose();
+        return;
+    }
+
+
+    method void score() {
+        var char key;
+
+        do Screen.clearScreen();
+        do Output.moveCursor(10,16);
+        do Output.printString("=============================");
+        do Output.moveCursor(11,16);
+        do Output.printString("= Your final score is: ");
+        do Output.printInt(score);
+        do Output.moveCursor(11,44);
+        do Output.printString("=");
+        do Output.moveCursor(12,16);
+        do Output.printString("=============================");
+        if (exit = false) {
+            do Output.moveCursor(14,18);
+            do Output.printString("Press any key to continue");
+            do Output.moveCursor(15,19);
+            do Output.printString("or any other key to exit...");
+            while (key = 0) { let key = Keyboard.keyPressed(); }
+        }
+        return;
+    }
+
+    method void dispose() {
+        do Memory.deAlloc(this);
+        return;
+    }
+}
