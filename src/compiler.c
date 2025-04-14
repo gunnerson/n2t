@@ -21,9 +21,150 @@
 #define DT_UNKNOWN 0
 #define SLASH '/'
 
-#define STACK_ADDRESS 256U
+#define STACK_ADDRESS 256UCLASS, METHOD, FUNCTION,
 
 extern char *realpath(const char *restrict path, char *restrict resolved_path);
+
+// tokenizer {{{1
+// enums {{{2
+typedef enum {
+  KEYWORD,
+  SYMBOL,
+  IDENTIFIER,
+  INT_CONST,
+  STR_CONST,
+} TokenType;
+
+typedef enum {
+  CONSTRUCTOR,
+  INT,
+  BOOLEAN,
+  CHAR,
+  VOID,
+  VAR,
+  STATIC,
+  FIELD,
+  LET,
+  DO,
+  IF,
+  ELSE,
+  WHILE,
+  RETURN,
+  TRUE,
+  FALSE,
+  NUL,
+  THIS,
+  keyword_num,
+} Keyword;
+
+char const *const keywords[keyword_num] = {[CONSTRUCTOR] = "constructor",
+                                           [INT] = "int",
+                                           [BOOLEAN] = "boolean",
+                                           [CHAR] = "char",
+                                           [VOID] = "void",
+                                           [VAR] = "var",
+                                           [STATIC] = "static",
+                                           [FIELD] = "field",
+                                           [LET] = "let",
+                                           [DO] = "do",
+                                           [IF] = "if",
+                                           [ELSE] = "else",
+                                           [WHILE] = "while",
+                                           [RETURN] = "return",
+                                           [TRUE] = "true",
+                                           [FALSE] = "false",
+                                           [NUL] = "null",
+                                           [THIS] = "this"};
+
+// aux functions {{{2
+Keyword keyword_from_str(char const *str) {
+  for (int i = 0; i < keyword_num; i++) {
+    if (!strcmp(str, keywords[i])) {
+      return (Keyword)i;
+    }
+  }
+  return -1;
+}
+
+bool is_symbol(char const c) {
+  return (c == '{' || c == '}' || c == '(' || c == ')' || c == '[' ||
+          c == ']' || c == '.' || c == ',' || c == ';' || c == '+' ||
+          c == '-' || c == '*' || c == '/' || c == '&' || c == '|' ||
+          c == '<' || c == '>' || c == '=' || c == '~');
+}
+
+bool is_intConst(char const *str) {
+  int val = atoi(str);
+  return (!strcmp(str, "0") || (val > 0 && val <= MAX_CONSTANT));
+}
+
+bool is_strConst(char const *str) {
+  return (*str == '"' && *(str + strlen(str) - 1) == '"');
+}
+
+// token list {{{2
+typedef struct Token {
+  TokenType type;
+  Keyword keyword;
+  char symbol;
+  char *identifier;
+  unsigned intVal;
+  char *strVal;
+  struct Token *next;
+} Token;
+
+typedef struct {
+  Token *head;
+  Token *tail;
+} Tokens;
+
+void tokenize(Tokens *t, TokenType const type, Keyword const keyword,
+              char const symbol, char const *identifier, unsigned const intVal,
+              char const *strVal) {
+  Token *new = malloc(sizeof(Token));
+  if (new) {
+    new->type = type;
+    new->keyword = keyword;
+    new->symbol = symbol;
+    if (identifier) {
+      new->identifier = strdup(identifier);
+      if (!new->identifier) {
+        perror("Failed to allocate memory for a token");
+        free(new);
+        return;
+      }
+    }
+    new->intVal = intVal;
+    if (strVal) {
+      new->strVal = strdup(strVal);
+      if (!new->strVal) {
+        perror("Failed to allocate memory for a token");
+        free(new);
+        return;
+      }
+    }
+    if (t->tail)
+      t->tail->next = new;
+    else
+      t->head = new;
+    t->tail = new;
+  } else
+    perror("Failed to allocate memory for a token");
+}
+
+void tokens_del(Tokens *t) {
+  Token *next, *cur = t->head;
+  while (cur) {
+    if (cur->identifier)
+      free(cur->identifier);
+    else if (cur->strVal)
+      free(cur->strVal);
+    next = cur->next;
+    free(cur);
+    cur = next;
+  }
+  free(t);
+}
 
 // main {{{1
 int main(int argc, char *argv[]) {
