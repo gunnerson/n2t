@@ -1,5 +1,6 @@
 //
 // definitions {{{1
+#include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
 #include <linux/limits.h>
@@ -13,13 +14,14 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define MAX_LINE_LENGTH 128
+#define MAX_LINE_LENGTH 256
 #define MAX_TOKEN_LENGTH 32
 #define MAX_CONSTANT 32767
 #define MAX_FILE_NAME 256
 #define DT_REG 8
 #define DT_UNKNOWN 0
 #define SLASH '/'
+#define PARSING_ERROR 1001
 
 #define STACK_ADDRESS 256UCLASS, METHOD, FUNCTION,
 
@@ -93,16 +95,31 @@ bool is_symbol(char const c) {
           c == '<' || c == '>' || c == '=' || c == '~');
 }
 
-bool is_intConst(char const *str) {
+int is_intConst(char const *str) {
+  if (!strcmp(str, "0"))
+    return 0;
   int val = atoi(str);
-  return (!strcmp(str, "0") || (val > 0 && val <= MAX_CONSTANT));
+  if (val > 0 && val <= MAX_CONSTANT)
+    return val;
+  return -1;
 }
 
 bool is_strConst(char const *str) {
   return (*str == '"' && *(str + strlen(str) - 1) == '"');
 }
 
-// token list {{{2
+bool is_identifier(char const *str) {
+  while (*str) {
+    if (!(*str >= 'a' && *str <= 'z') && !(*str >= 'A' && *str <= 'Z') &&
+        !(*str >= '0' && *str <= '9') && *str != '_')
+      return false;
+    str++;
+  }
+  if (isdigit(str[0]))
+    return false;
+  return true;
+}
+// tokens DS {{{2
 typedef struct Token {
   TokenType type;
   Keyword keyword;
@@ -111,16 +128,18 @@ typedef struct Token {
   unsigned intVal;
   char *strVal;
   struct Token *next;
+  struct Token *nextSibling;
+  struct Token *children;
 } Token;
 
 typedef struct {
   Token *head;
   Token *tail;
-} Tokens;
+} TokenList;
 
-void tokenize(Tokens *t, TokenType const type, Keyword const keyword,
-              char const symbol, char const *identifier, unsigned const intVal,
-              char const *strVal) {
+void add_token(TokenList *t, TokenType const type, Keyword const keyword,
+               char const symbol, char const *identifier, unsigned const intVal,
+               char const *strVal) {
   Token *new = malloc(sizeof(Token));
   if (new) {
     new->type = type;
@@ -133,7 +152,8 @@ void tokenize(Tokens *t, TokenType const type, Keyword const keyword,
         free(new);
         return;
       }
-    }
+    } else
+      new->identifier = NULL;
     new->intVal = intVal;
     if (strVal) {
       new->strVal = strdup(strVal);
@@ -142,7 +162,11 @@ void tokenize(Tokens *t, TokenType const type, Keyword const keyword,
         free(new);
         return;
       }
-    }
+    } else
+      new->strVal = NULL;
+    new->next = NULL;
+    new->nextSibling = NULL;
+    new->children = NULL;
     if (t->tail)
       t->tail->next = new;
     else
@@ -152,7 +176,16 @@ void tokenize(Tokens *t, TokenType const type, Keyword const keyword,
     perror("Failed to allocate memory for a token");
 }
 
-void tokens_del(Tokens *t) {
+void token_list_dump(TokenList *t) {
+  Token *cur = t->head;
+  while (cur) {
+    printf("%d\t%d\t%c\t%s\t\t\t%u\t%s\n", cur->type, cur->keyword, cur->symbol,
+           cur->identifier, cur->intVal, cur->strVal);
+    cur = cur->next;
+  }
+}
+
+void token_list_del(TokenList *t) {
   Token *next, *cur = t->head;
   while (cur) {
     if (cur->identifier)
@@ -166,6 +199,65 @@ void tokens_del(Tokens *t) {
   free(t);
 }
 
+int parse_token(TokenList *t, char const *str) {
+  Keyword kw = keyword_from_str(str);
+  if (kw != -1) {
+    add_token(t, KEYWORD, kw, 0, NULL, 0, NULL);
+  } else {
+    int intVal = is_intConst(str);
+    if (intVal != -1)
+      add_token(t, INT_CONST, 0, 0, NULL, (unsigned)intVal, NULL);
+    else if (is_strConst(str))
+      add_token(t, STR_CONST, 0, 0, NULL, 0, str);
+    else if (is_identifier(str))
+      add_token(t, IDENTIFIER, 0, 0, str, 0, NULL);
+    else
+      return EXIT_FAILURE;
+  }
+  return EXIT_SUCCESS;
+}
+
+// parse_file {{{1
+void parse_file(FILE *file) {
+  TokenList *tl = malloc(sizeof(TokenList));
+  if (tl == NULL) {
+    perror("Failed to allocate memory for a token list");
+    return;
+  }
+  tl->head = NULL;
+  tl->tail = NULL;
+  char line[MAX_LINE_LENGTH];
+  for (size_t lineNumber = 1; fgets(line, sizeof(line), file); lineNumber++) {
+    char *c = line;
+    char token[sizeof(line)] = "";
+
+    for (size_t i = 0, j = 0; i < MAX_LINE_LENGTH; c++) {
+      if (isspace(*c) || is_symbol(*c) || *c == '\0') {
+        if (*token) {
+          token[j] = '\0';
+          if (parse_token(tl, token)) {
+            fprintf(stderr, "Parsing error on line %zu:%zu (bad token)\n",
+                    lineNumber, i);
+            errno = PARSING_ERROR;
+            break;
+          }
+          *token = '\0';
+          j = 0;
+        }
+        if (is_symbol(*c))
+          add_token(tl, SYMBOL, 0, *c, NULL, 0, NULL);
+        if (*c == '\0' || *c == '\n')
+          break;
+      } else if (*c) {
+        token[j++] = *c;
+      }
+    }
+    // if (errno)
+    //   break;
+  }
+  token_list_dump(tl);
+  token_list_del(tl);
+}
 // main {{{1
 int main(int argc, char *argv[]) {
   if (argc < 2) {
@@ -176,12 +268,6 @@ int main(int argc, char *argv[]) {
   char *path = realpath(argv[1], NULL);
   if (path == NULL) {
     perror("Couldn't resolve path");
-    return EXIT_FAILURE;
-  }
-  char *slash = strrchr(path, SLASH);
-  if (slash == NULL) {
-    perror("Error allocating memory");
-    free(path);
     return EXIT_FAILURE;
   }
 
@@ -205,6 +291,7 @@ int main(int argc, char *argv[]) {
         strcpy(dot, ".vm");
         FILE *ofile = fopen(path, "w");
         if (ofile) {
+          parse_file(file);
           fclose(ofile);
         } else
           fprintf(stderr, "Error creating output file: %s\n", path);
@@ -219,37 +306,29 @@ int main(int argc, char *argv[]) {
     DIR *dir = opendir(path);
     if (dir) {
       struct dirent *entry;
-      char dname[MAX_FILE_NAME] = {0};
-      strncpy(dname, slash + 1, sizeof(dname) - 1);
-      char *file_path = calloc(PATH_MAX, sizeof(char));
-      if (file_path) {
-        snprintf(file_path, PATH_MAX - 1, "%s%c%s.vm", path, SLASH, dname);
-        FILE *ofile = fopen(file_path, "w");
-        if (ofile) {
-          while ((entry = readdir(dir))) {
-            if (entry->d_type == DT_REG || entry->d_type == DT_UNKNOWN) {
-              char *dot = strrchr(entry->d_name, '.');
-              if (dot && !strcmp(dot, ".jack")) {
-                snprintf(file_path, PATH_MAX - 1, "%s%c%s", path, SLASH,
-                         entry->d_name);
-                FILE *file = fopen(file_path, "r");
-                if (file) {
-                  fclose(file);
-                } else
-                  perror("Error opening file");
-              }
+      while ((entry = readdir(dir))) {
+        if (entry->d_type == DT_REG || entry->d_type == DT_UNKNOWN) {
+          char *file_path = malloc(PATH_MAX);
+          if (file_path) {
+            char *dot = strrchr(entry->d_name, '.');
+            if (dot && !strcmp(dot, ".jack")) {
+              snprintf(file_path, PATH_MAX, "%s%c%s", path, SLASH,
+                       entry->d_name);
+              FILE *file = fopen(file_path, "r");
+              if (file) {
+                parse_file(file);
+                fclose(file);
+              } else
+                perror("Error opening file");
             }
-          }
-          fclose(ofile);
-        } else
-          perror("Error opening out file");
-        free(file_path);
-      } else
-        perror("Error allocating memory");
+            free(file_path);
+          } else
+            perror("Error allocating memory");
+        }
+      }
       closedir(dir);
     } else
       perror("Error opening directory");
-
   } else {
     perror("Error opening files");
   }
