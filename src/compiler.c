@@ -28,7 +28,7 @@
 extern char *realpath(const char *restrict path, char *restrict resolved_path);
 
 // tokenizer {{{1
-// enums {{{2
+// definitions {{{2
 typedef enum {
   KEYWORD,
   SYMBOL,
@@ -78,6 +78,13 @@ char const *const keywords[keyword_num] = {[CONSTRUCTOR] = "constructor",
                                            [NUL] = "null",
                                            [THIS] = "this"};
 
+typedef union {
+  Keyword keyword;
+  char symbol;
+  unsigned intVal;
+  char *strVal;
+} TokenData;
+
 // aux functions {{{2
 Keyword keyword_from_str(char const *str) {
   for (int i = 0; i < keyword_num; i++) {
@@ -104,10 +111,6 @@ int is_intConst(char const *str) {
   return -1;
 }
 
-bool is_strConst(char const *str) {
-  return (*str == '"' && *(str + strlen(str) - 1) == '"');
-}
-
 bool is_identifier(char const *str) {
   while (*str) {
     if (!(*str >= 'a' && *str <= 'z') && !(*str >= 'A' && *str <= 'Z') &&
@@ -119,14 +122,12 @@ bool is_identifier(char const *str) {
     return false;
   return true;
 }
-// tokens DS {{{2
+// data structures {{{2
 typedef struct Token {
   TokenType type;
-  Keyword keyword;
-  char symbol;
-  char *identifier;
-  unsigned intVal;
-  char *strVal;
+  TokenData data;
+  size_t lineN;
+  size_t lineP;
   struct Token *next;
   struct Token *nextSibling;
   struct Token *children;
@@ -137,33 +138,31 @@ typedef struct {
   Token *tail;
 } TokenList;
 
-void add_token(TokenList *t, TokenType const type, Keyword const keyword,
-               char const symbol, char const *identifier, unsigned const intVal,
-               char const *strVal) {
+void add_token(TokenList *t, TokenType const type, TokenData const data,
+               size_t lineN, size_t lineP) {
   Token *new = malloc(sizeof(Token));
   if (new) {
     new->type = type;
-    new->keyword = keyword;
-    new->symbol = symbol;
-    if (identifier) {
-      new->identifier = strdup(identifier);
-      if (!new->identifier) {
+    switch (type) {
+    case KEYWORD:
+      new->data.keyword = data.keyword;
+      break;
+    case SYMBOL:
+      new->data.symbol = data.symbol;
+      break;
+    case INT_CONST:
+      new->data.intVal = data.intVal;
+      break;
+    default:
+      new->data.strVal = strdup(data.strVal);
+      if (new->data.strVal == NULL) {
         perror("Failed to allocate memory for a token");
         free(new);
         return;
       }
-    } else
-      new->identifier = NULL;
-    new->intVal = intVal;
-    if (strVal) {
-      new->strVal = strdup(strVal);
-      if (!new->strVal) {
-        perror("Failed to allocate memory for a token");
-        free(new);
-        return;
-      }
-    } else
-      new->strVal = NULL;
+    }
+    new->lineN = lineN;
+    new->lineP = lineP;
     new->next = NULL;
     new->nextSibling = NULL;
     new->children = NULL;
@@ -179,8 +178,23 @@ void add_token(TokenList *t, TokenType const type, Keyword const keyword,
 void token_list_dump(TokenList *t) {
   Token *cur = t->head;
   while (cur) {
-    printf("%d\t%d\t%c\t%s\t\t\t%u\t%s\n", cur->type, cur->keyword, cur->symbol,
-           cur->identifier, cur->intVal, cur->strVal);
+    switch (cur->type) {
+    case KEYWORD:
+      printf("%d\t%zu:%zu\t%d\n", cur->type, cur->lineN, cur->lineP,
+             cur->data.keyword);
+      break;
+    case SYMBOL:
+      printf("%d\t%zu:%zu\t%c\n", cur->type, cur->lineN, cur->lineP,
+             cur->data.symbol);
+      break;
+    case INT_CONST:
+      printf("%d\t%zu:%zu\t%d\n", cur->type, cur->lineN, cur->lineP,
+             cur->data.intVal);
+      break;
+    default:
+      printf("%d\t%zu:%zu\t%s\n", cur->type, cur->lineN, cur->lineP,
+             cur->data.strVal);
+    }
     cur = cur->next;
   }
 }
@@ -188,10 +202,8 @@ void token_list_dump(TokenList *t) {
 void token_list_del(TokenList *t) {
   Token *next, *cur = t->head;
   while (cur) {
-    if (cur->identifier)
-      free(cur->identifier);
-    else if (cur->strVal)
-      free(cur->strVal);
+    if (cur->type == IDENTIFIER || cur->type == STR_CONST)
+      free(cur->data.strVal);
     next = cur->next;
     free(cur);
     cur = next;
@@ -199,63 +211,127 @@ void token_list_del(TokenList *t) {
   free(t);
 }
 
-int parse_token(TokenList *t, char const *str) {
+int parse_token(TokenList *t, char *str, unsigned lineN, unsigned lineP) {
   Keyword kw = keyword_from_str(str);
+  TokenType type;
+  TokenData data;
   if (kw != -1) {
-    add_token(t, KEYWORD, kw, 0, NULL, 0, NULL);
+    type = KEYWORD;
+    data.keyword = kw;
   } else {
     int intVal = is_intConst(str);
-    if (intVal != -1)
-      add_token(t, INT_CONST, 0, 0, NULL, (unsigned)intVal, NULL);
-    else if (is_strConst(str))
-      add_token(t, STR_CONST, 0, 0, NULL, 0, str);
-    else if (is_identifier(str))
-      add_token(t, IDENTIFIER, 0, 0, str, 0, NULL);
-    else
+    if (intVal != -1) {
+      type = INT_CONST;
+      data.intVal = intVal;
+    } else if (is_identifier(str)) {
+      type = IDENTIFIER;
+      data.strVal = str;
+    } else
       return EXIT_FAILURE;
   }
+  add_token(t, type, data, lineN, lineP);
   return EXIT_SUCCESS;
 }
 
-// parse_file {{{1
-void parse_file(FILE *file) {
+// tokenize_file {{{2
+TokenList *tokenize_file(FILE *file) {
   TokenList *tl = malloc(sizeof(TokenList));
   if (tl == NULL) {
     perror("Failed to allocate memory for a token list");
-    return;
+    return NULL;
   }
   tl->head = NULL;
   tl->tail = NULL;
   char line[MAX_LINE_LENGTH];
+  TokenData data;
+  bool isMultComment = false; // Inside multi-line comment
   for (size_t lineNumber = 1; fgets(line, sizeof(line), file); lineNumber++) {
     char *c = line;
     char token[sizeof(line)] = "";
+    bool isStr = false;   // Met open quote, start collecting string constant
+    bool isSlash = false; // Met slash, check if it's 'division' or comment
 
-    for (size_t i = 0, j = 0; i < MAX_LINE_LENGTH; c++) {
-      if (isspace(*c) || is_symbol(*c) || *c == '\0') {
-        if (*token) {
+    for (size_t i = 1, j = 0; i < MAX_LINE_LENGTH; c++, i++) {
+      // Handle multi-line comments
+      if (isMultComment) {
+        if (isspace(*c))
+          continue;
+        if (*c == '*')
+          break;
+        isMultComment = false;
+      }
+      // Handle string constants
+      if (isStr) {
+        if (*c == '"') {
           token[j] = '\0';
-          if (parse_token(tl, token)) {
-            fprintf(stderr, "Parsing error on line %zu:%zu (bad token)\n",
-                    lineNumber, i);
-            errno = PARSING_ERROR;
-            break;
-          }
+          data.strVal = token;
+          add_token(tl, STR_CONST, data, lineNumber, i - strlen(token));
           *token = '\0';
           j = 0;
+          isStr = false;
+        } else {
+          token[j++] = *c;
         }
-        if (is_symbol(*c))
-          add_token(tl, SYMBOL, 0, *c, NULL, 0, NULL);
-        if (*c == '\0' || *c == '\n')
+        // Handle 'slash' character
+      } else if (isSlash) {
+        if (*c == '/')
           break;
-      } else if (*c) {
-        token[j++] = *c;
+        else if (*c == '*') {
+          isMultComment = true;
+          break;
+        } else {
+          data.symbol = *--c;
+          add_token(tl, SYMBOL, data, lineNumber, --i);
+          isSlash = false;
+        }
+
+      } else {
+        if (isspace(*c) || is_symbol(*c) || *c == '\0') {
+          if (*token) {
+            token[j] = '\0';
+            if (parse_token(tl, token, lineNumber, i - strlen(token))) {
+              fprintf(stderr, "%zu:%zu Parsing error. Bad token '%s'\n",
+                      lineNumber, i, token);
+              errno = PARSING_ERROR;
+              break;
+            }
+            *token = '\0';
+            j = 0;
+          }
+          if (is_symbol(*c)) {
+            if (*c == '/') {
+              isSlash = true;
+            } else {
+              data.symbol = *c;
+              add_token(tl, SYMBOL, data, lineNumber, i);
+            }
+          }
+          if (*c == '\0' || *c == '\n')
+            break;
+        } else if (*c == '"') {
+          isStr = true;
+        } else if (*c) {
+          token[j++] = *c;
+        }
       }
     }
-    // if (errno)
-    //   break;
+    if (errno)
+      break;
   }
-  token_list_dump(tl);
+  // token_list_dump(tl);
+  return tl;
+}
+// parse_tokens {{{1
+void parse_tokens(TokenList *tl) {
+  Token *cur = tl->head;
+  for (; cur; cur = cur->next) {
+    if (cur->type == KEYWORD || cur->data.keyword == CLASS)
+  }
+}
+// handle_file {{{1
+void handle_file(FILE *in, FILE *out) {
+  TokenList *tl = tokenize_file(in);
+  parse_tokens(tl);
   token_list_del(tl);
 }
 // main {{{1
@@ -270,6 +346,7 @@ int main(int argc, char *argv[]) {
     perror("Couldn't resolve path");
     return EXIT_FAILURE;
   }
+  errno = 0;
 
   struct stat *path_stat = malloc(sizeof(struct stat));
   if (path_stat == NULL) {
@@ -291,7 +368,7 @@ int main(int argc, char *argv[]) {
         strcpy(dot, ".vm");
         FILE *ofile = fopen(path, "w");
         if (ofile) {
-          parse_file(file);
+          handle_file(file, ofile);
           fclose(ofile);
         } else
           fprintf(stderr, "Error creating output file: %s\n", path);
@@ -316,7 +393,15 @@ int main(int argc, char *argv[]) {
                        entry->d_name);
               FILE *file = fopen(file_path, "r");
               if (file) {
-                parse_file(file);
+                strcpy(dot, ".vm");
+                snprintf(file_path, PATH_MAX, "%s%c%s", path, SLASH,
+                         entry->d_name);
+                FILE *ofile = fopen(file_path, "w");
+                if (ofile) {
+                  handle_file(file, ofile);
+                  fclose(ofile);
+                } else
+                  perror("Error opening/creating file");
                 fclose(file);
               } else
                 perror("Error opening file");
