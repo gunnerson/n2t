@@ -38,7 +38,10 @@ typedef enum {
 } TokenType;
 
 typedef enum {
+  CLASS,
   CONSTRUCTOR,
+  FUNCTION,
+  METHOD,
   INT,
   BOOLEAN,
   CHAR,
@@ -59,7 +62,10 @@ typedef enum {
   keyword_num,
 } Keyword;
 
-char const *const keywords[keyword_num] = {[CONSTRUCTOR] = "constructor",
+char const *const keywords[keyword_num] = {[CLASS] = "class",
+                                           [CONSTRUCTOR] = "constructor",
+                                           [FUNCTION] = "function",
+                                           [METHOD] = "method",
                                            [INT] = "int",
                                            [BOOLEAN] = "boolean",
                                            [CHAR] = "char",
@@ -318,20 +324,213 @@ TokenList *tokenize_file(FILE *file) {
     if (errno)
       break;
   }
-  // token_list_dump(tl);
   return tl;
 }
-// parse_tokens {{{1
-void parse_tokens(TokenList *tl) {
-  Token *cur = tl->head;
-  for (; cur; cur = cur->next) {
-    if (cur->type == KEYWORD || cur->data.keyword == CLASS)
+// compilation engine {{{1
+// compSubroutine {{{2
+Token *compParameterList(Token *t, FILE *out) {
+  /* 'constructor' | 'function' | 'method') ('void' | type) subroutineName
+   * '(' parameterList ')' subroutineBody */
+  Token *n;
+  fprintf(out, "<parameterList>\n");
+  if (errno) {
+    fprintf(stderr,
+            "[%zu:%zu] Syntax error: invalid parameter list declaration\n",
+            t->lineN, t->lineP);
+  }
+  fprintf(out, "</parameterList>\n");
+  return t;
+}
+// compSubroutine {{{2
+Token *compSubroutine(Token *t, FILE *out) {
+  /* 'constructor' | 'function' | 'method') ('void' | type) subroutineName
+   * '(' parameterList ')' subroutineBody */
+  Token *n;
+  fprintf(out, "<subroutineDec>\n");
+  if (t->type == KEYWORD &&
+      (t->data.keyword == CONSTRUCTOR || t->data.keyword == FUNCTION ||
+       t->data.keyword == METHOD)) {
+    fprintf(out, "<keyword>%s</keyword>\n", keywords[t->data.keyword]);
+    t = t->next;
+
+    if ((t->type == KEYWORD &&
+         (t->data.keyword == VOID || t->data.keyword == INT ||
+          t->data.keyword == CHAR || t->data.keyword == BOOLEAN)) ||
+        (t->type == IDENTIFIER)) {
+      if (t->type == KEYWORD)
+        fprintf(out, "<keyword>%s</keyword>\n", keywords[t->data.keyword]);
+      else
+        fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+      t = t->next;
+
+      if (t->type == IDENTIFIER) {
+        fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+        t = t->next;
+
+        if (t->type == SYMBOL && t->data.symbol == '(') {
+          fprintf(out, "<symbol>(</symbol>\n");
+          t = t->next;
+
+          t = compParameterList(t, out);
+
+          if (t->type == SYMBOL && t->data.symbol == ')') {
+            fprintf(out, "<symbol>)</symbol>\n");
+            t = t->next;
+
+            if (t->type == SYMBOL && t->data.symbol == '{') {
+              fprintf(out, "<symbol>{</symbol>\n");
+              t = t->next;
+
+              while (true) {
+                n = compVarDec(t, out);
+                if (n == t)
+                  break;
+                t = n;
+              }
+
+              t = compStatements(t, out);
+
+              if (t->type == SYMBOL && t->data.symbol == '}') {
+                fprintf(out, "<symbol>}</symbol>\n");
+                t = t->next;
+
+              } else
+                errno = PARSING_ERROR;
+            } else
+              errno = PARSING_ERROR;
+          } else
+            errno = PARSING_ERROR;
+        } else
+          errno = PARSING_ERROR;
+      } else
+        errno = PARSING_ERROR;
+    } else
+      errno = PARSING_ERROR;
+  } else
+    errno = PARSING_ERROR;
+  if (errno) {
+    fprintf(stderr, "[%zu:%zu] Syntax error: invalid subroutine declaration\n",
+            t->lineN, t->lineP);
+  }
+  fprintf(out, "</subroutineDec>\n");
+  return t;
+}
+// compVarDec {{{2
+Token *compClassVarDec(Token *t, FILE *out) {
+  // ('static' | 'field') type varName (',' varName)* ';'
+  fprintf(out, "<classVarDec>\n");
+  if (t->type == KEYWORD &&
+      (t->data.keyword == STATIC || t->data.keyword == FIELD)) {
+    fprintf(out, "<keyword>%s</keyword>\n", keywords[t->data.keyword]);
+    t = t->next;
+
+    if ((t->type == KEYWORD &&
+         (t->data.keyword == INT || t->data.keyword == CHAR ||
+          t->data.keyword == BOOLEAN)) ||
+        (t->type == IDENTIFIER)) {
+      if (t->type == KEYWORD)
+        fprintf(out, "<keyword>%s</keyword>\n", keywords[t->data.keyword]);
+      else
+        fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+      t = t->next;
+
+      if (t->type == IDENTIFIER) {
+        fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+        t = t->next;
+
+        while (true) {
+          if (t->type != SYMBOL || t->data.symbol != ',')
+            break;
+          fprintf(out, "<symbol>,</symbol>\n");
+          t = t->next;
+
+          if (t->type == IDENTIFIER) {
+            fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+            t = t->next;
+          } else {
+            errno = PARSING_ERROR;
+            break;
+          }
+        }
+
+        if (t->type == SYMBOL && t->data.symbol == ';') {
+          fprintf(out, "<symbol>;</symbol>\n");
+          t = t->next;
+
+        } else
+          errno = PARSING_ERROR;
+      } else
+        errno = PARSING_ERROR;
+    } else
+      errno = PARSING_ERROR;
+  } else
+    errno = PARSING_ERROR;
+  if (errno) {
+    fprintf(stderr, "[%zu:%zu] Syntax error: invalid variable declaration\n",
+            t->lineN, t->lineP);
+  }
+  fprintf(out, "</classVarDec>\n");
+  return t;
+}
+// compClass {{{2
+void compClass(Token *t, FILE *out) {
+  //'class' className '{' classVarDec* subroutineDec* '}'
+  Token *n;
+  fprintf(out, "<class>\n<keyword>class</keyword>\n");
+  if (t->type == IDENTIFIER) {
+    fprintf(out, "%s\n", t->data.strVal);
+    t = t->next;
+
+    if (t->type == SYMBOL && t->data.symbol == '{') {
+      fprintf(out, "<symbol>{</symbol>\n");
+      t = t->next;
+
+      while (true) {
+        n = compClassVarDec(t, out);
+        if (n == t)
+          break;
+        t = n;
+      }
+
+      while (true) {
+        n = compSubroutine(t, out);
+        if (n == t)
+          break;
+        t = n;
+      }
+
+      if (t->type == SYMBOL && t->data.symbol == '}') {
+        fprintf(out, "<symbol>}</symbol>\n");
+
+      } else
+        errno = PARSING_ERROR;
+    } else
+      errno = PARSING_ERROR;
+  } else
+    errno = PARSING_ERROR;
+  if (errno) {
+    fprintf(stderr, "[%zu:%zu] Syntax error: invalid class definition\n",
+            t->lineN, t->lineP);
+  }
+  fprintf(out, "</class>\n");
+}
+// parse_tokens {{{2
+void parse_tokens(TokenList *tl, FILE *out) {
+  Token *t = tl->head;
+  if (t->type == KEYWORD && t->data.keyword == CLASS) {
+    compClass(t->next, out);
+  } else {
+    fprintf(stderr,
+            "[%zu:%zu] Syntax error: file should start with class definition\n",
+            t->lineN, t->lineP);
+    errno = PARSING_ERROR;
   }
 }
 // handle_file {{{1
 void handle_file(FILE *in, FILE *out) {
   TokenList *tl = tokenize_file(in);
-  parse_tokens(tl);
+  // token_list_dump(tl);
+  parse_tokens(tl, out);
   token_list_del(tl);
 }
 // main {{{1
