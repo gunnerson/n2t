@@ -5,7 +5,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-// hash-table {{{1
 typedef struct {
   const char *key;
   unsigned value;

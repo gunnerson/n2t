@@ -327,10 +327,35 @@ TokenList *tokenize_file(FILE *file) {
   return tl;
 }
 // compilation engine {{{1
+// prototypes {{{2
+Token *compExpressionList(Token *t, FILE *out);
+Token *compTerm(Token *t, FILE *out);
+Token *compExpression(Token *t, FILE *out);
+Token *compReturn(Token *t, FILE *out);
+Token *compWhile(Token *t, FILE *out);
+Token *compIf(Token *t, FILE *out);
+Token *compLet(Token *t, FILE *out);
+Token *compDo(Token *t, FILE *out);
+Token *compStatements(Token *t, FILE *out);
+Token *compVarDec(Token *t, FILE *out);
+Token *compParameterList(Token *t, FILE *out);
+Token *compSubroutine(Token *t, FILE *out);
+Token *compClassVarDec(Token *t, FILE *out);
+Token *compClass(Token *t, FILE *out);
 // compExpressionList {{{2
 Token *compExpressionList(Token *t, FILE *out) {
   // (expression (',' expression)* )?
   fprintf(out, "<expressionList>\n");
+
+  t = compExpression(t, out);
+
+  while (t->type == SYMBOL && t->data.symbol == ',') {
+    fprintf(out, "<symbol>,</symbol>\n");
+    t = t->next;
+
+    t = compExpression(t, out);
+  }
+
   if (errno) {
     fprintf(stderr, "[%zu:%zu] Syntax error: invalid expression list\n",
             t->lineN, t->lineP);
@@ -355,6 +380,25 @@ Token *compTerm(Token *t, FILE *out) {
 Token *compExpression(Token *t, FILE *out) {
   // term (op term)*
   fprintf(out, "<expression>\n");
+
+  t = compTerm(t, out);
+
+  while (t->type == SYMBOL && (t->data.symbol == '+' || t->data.symbol == '-' ||
+                               t->data.symbol == '*' || t->data.symbol == '/' ||
+                               t->data.symbol == '&' || t->data.symbol == '|' ||
+                               t->data.symbol == '<' || t->data.symbol == '>' ||
+                               t->data.symbol == '=')) {
+    fprintf(out, "<symbol>%c</symbol>\n", t->data.symbol);
+    t = t->next;
+
+    if (t->type == SYMBOL && t->data.symbol == '=') {
+      fprintf(out, "<symbol>=</symbol>\n");
+      t = t->next;
+    }
+
+    t = compTerm(t, out);
+  }
+
   if (errno) {
     fprintf(stderr, "[%zu:%zu] Syntax error: invalid expression\n", t->lineN,
             t->lineP);
@@ -365,7 +409,17 @@ Token *compExpression(Token *t, FILE *out) {
 // compReturn {{{2
 Token *compReturn(Token *t, FILE *out) {
   // 'return' expression? ';'
-  fprintf(out, "<returnStatement>\n");
+  fprintf(out, "<keyword>return</keyword>\n<returnStatement>\n");
+
+  t = compExpression(t, out);
+
+  if (t->type == SYMBOL && t->data.symbol == ';') {
+    fprintf(out, "<symbol>;</symbol>\n");
+    t = t->next;
+
+  } else
+    errno = PARSING_ERROR;
+
   if (errno) {
     fprintf(stderr, "[%zu:%zu] Syntax error: invalid return statement\n",
             t->lineN, t->lineP);
@@ -376,7 +430,35 @@ Token *compReturn(Token *t, FILE *out) {
 // compWhile {{{2
 Token *compWhile(Token *t, FILE *out) {
   // 'while' '(' expression ')' '{' statements '}'
-  fprintf(out, "<whileStatement>\n");
+  fprintf(out, "<keyword>while</keyword>\n<whileStatement>\n");
+  if (t->type == SYMBOL && t->data.symbol == '(') {
+    fprintf(out, "<symbol>(</symbol>\n");
+    t = t->next;
+
+    t = compExpression(t, out);
+
+    if (t->type == SYMBOL && t->data.symbol == ')') {
+      fprintf(out, "<symbol>)</symbol>\n");
+      t = t->next;
+
+      if (t->type == SYMBOL && t->data.symbol == '{') {
+        fprintf(out, "<symbol>{</symbol>\n");
+        t = t->next;
+
+        t = compStatements(t, out);
+
+        if (t->type == SYMBOL && t->data.symbol == '}') {
+          fprintf(out, "<symbol>}</symbol>\n");
+          t = t->next;
+
+        } else
+          errno = PARSING_ERROR;
+      } else
+        errno = PARSING_ERROR;
+    } else
+      errno = PARSING_ERROR;
+  } else
+    errno = PARSING_ERROR;
   if (errno) {
     fprintf(stderr, "[%zu:%zu] Syntax error: invalid while statement\n",
             t->lineN, t->lineP);
@@ -388,7 +470,54 @@ Token *compWhile(Token *t, FILE *out) {
 Token *compIf(Token *t, FILE *out) {
   /*   'if' '(' expression ')' '{' statements '}'
    * ('else' '{' statements '}')? */
-  fprintf(out, "<ifStatement>\n");
+  fprintf(out, "<keyword>if</keyword>\n<ifStatement>\n");
+  if (t->type == SYMBOL && t->data.symbol == '(') {
+    fprintf(out, "<symbol>(</symbol>\n");
+    t = t->next;
+
+    t = compExpression(t, out);
+
+    if (t->type == SYMBOL && t->data.symbol == ')') {
+      fprintf(out, "<symbol>)</symbol>\n");
+      t = t->next;
+
+      if (t->type == SYMBOL && t->data.symbol == '{') {
+        fprintf(out, "<symbol>{</symbol>\n");
+        t = t->next;
+
+        t = compStatements(t, out);
+
+        if (t->type == SYMBOL && t->data.symbol == '}') {
+          fprintf(out, "<symbol>}</symbol>\n");
+          t = t->next;
+
+          if (t->type == KEYWORD && t->data.keyword == ELSE) {
+            fprintf(out, "<keyword>else</keyword>\n");
+            t = t->next;
+
+            if (t->type == SYMBOL && t->data.symbol == '{') {
+              fprintf(out, "<symbol>{</symbol>\n");
+              t = t->next;
+
+              t = compStatements(t, out);
+
+              if (t->type == SYMBOL && t->data.symbol == '}') {
+                fprintf(out, "<symbol>}</symbol>\n");
+                t = t->next;
+
+              } else
+                errno = PARSING_ERROR;
+            } else
+              errno = PARSING_ERROR;
+          }
+        } else
+          errno = PARSING_ERROR;
+      } else
+        errno = PARSING_ERROR;
+    } else
+      errno = PARSING_ERROR;
+  } else
+    errno = PARSING_ERROR;
   if (errno) {
     fprintf(stderr, "[%zu:%zu] Syntax error: invalid if statement\n", t->lineN,
             t->lineP);
@@ -399,7 +528,41 @@ Token *compIf(Token *t, FILE *out) {
 // compLet {{{2
 Token *compLet(Token *t, FILE *out) {
   // 'let' varName ('[' expression ']')? '=' expression ';'
-  fprintf(out, "<letStatement>\n");
+  fprintf(out, "<keyword>let</keyword>\n<letStatement>\n");
+  if (t->type == IDENTIFIER) {
+    fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+    t = t->next;
+
+    if (t->type == SYMBOL && t->data.symbol == '[') {
+      fprintf(out, "<symbol>[</symbol>\n");
+      t = t->next;
+
+      t = compExpression(t, out);
+
+      if (t->type == SYMBOL && t->data.symbol == ']') {
+        fprintf(out, "<symbol>]</symbol>\n");
+        t = t->next;
+
+      } else
+        errno = PARSING_ERROR;
+    }
+
+    if (t->type == SYMBOL && t->data.symbol == '=') {
+      fprintf(out, "<symbol>=</symbol>\n");
+      t = t->next;
+
+      t = compExpression(t, out);
+
+      if (t->type == SYMBOL && t->data.symbol == ';') {
+        fprintf(out, "<symbol>;</symbol>\n");
+        t = t->next;
+
+      } else
+        errno = PARSING_ERROR;
+    } else
+      errno = PARSING_ERROR;
+  } else
+    errno = PARSING_ERROR;
   if (errno) {
     fprintf(stderr, "[%zu:%zu] Syntax error: invalid let statement\n", t->lineN,
             t->lineP);
@@ -409,46 +572,220 @@ Token *compLet(Token *t, FILE *out) {
 }
 // compDo {{{2
 Token *compDo(Token *t, FILE *out) {
-  // 'do' subroutineCall ';'
-  fprintf(out, "<doStatement>\n");
+  /* 'do' subroutineName '(' expressionList ')' | (className |
+   * varName) '.' subroutineName '(' expressionList ')'  ';' */
+  fprintf(out, "<keyword>do</keyword>\n<doStatement>\n");
+  if (t->type == IDENTIFIER) {
+    fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+    t = t->next;
+
+    if (t->type == SYMBOL && t->data.symbol == '.') {
+      fprintf(out, "<symbol>.</symbol>\n");
+      t = t->next;
+
+      if (t->type == IDENTIFIER) {
+        fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+        t = t->next;
+
+      } else
+        errno = PARSING_ERROR;
+    }
+
+    if (t->type == SYMBOL && t->data.symbol == '(') {
+      fprintf(out, "<symbol>(</symbol>\n");
+      t = t->next;
+
+      t = compExpressionList(t, out);
+
+      if (t->type == SYMBOL && t->data.symbol == ')') {
+        fprintf(out, "<symbol>)</symbol>\n");
+        t = t->next;
+
+        if (t->type == SYMBOL && t->data.symbol == ';') {
+          fprintf(out, "<symbol>;</symbol>\n");
+          t = t->next;
+
+        } else
+          errno = PARSING_ERROR;
+      } else
+        errno = PARSING_ERROR;
+    } else
+      errno = PARSING_ERROR;
+  } else
+    errno = PARSING_ERROR;
   if (errno) {
     fprintf(stderr, "[%zu:%zu] Syntax error: invalid do statement\n", t->lineN,
             t->lineP);
+    errno = 0;
   }
   fprintf(out, "</doStatement>\n");
+  return t;
+}
+// compStatements {{{2
+Token *compStatements(Token *t, FILE *out) {
+  /* (letStatement | ifStatement | whileStatement |
+   * doStatement | returnStatement)* */
+  Token *n;
+  fprintf(out, "<statements>\n");
+  while (true) {
+    if (t->type == KEYWORD && t->data.keyword == DO) {
+      t = t->next;
+      n = compDo(t, out);
+      if (n == t)
+        break;
+      t = n;
+
+    } else if (t->type == KEYWORD && t->data.keyword == LET) {
+      t = t->next;
+      n = compDo(t, out);
+      if (n == t)
+        break;
+      t = n;
+
+    } else if (t->type == KEYWORD && t->data.keyword == IF) {
+      t = t->next;
+      n = compIf(t, out);
+      if (n == t)
+        break;
+      t = n;
+
+    } else if (t->type == KEYWORD && t->data.keyword == WHILE) {
+      t = t->next;
+      n = compWhile(t, out);
+      if (n == t)
+        break;
+      t = n;
+
+    } else if (t->type == KEYWORD && t->data.keyword == RETURN) {
+      t = t->next;
+      n = compReturn(t, out);
+      if (n == t)
+        break;
+      t = n;
+    }
+  }
+  fprintf(out, "</statements>\n");
+
+  if (errno) {
+    fprintf(stderr, "[%zu:%zu] Syntax error: invalid statement\n", t->lineN,
+            t->lineP);
+    errno = 0;
+  }
   return t;
 }
 // compVarDec {{{2
 Token *compVarDec(Token *t, FILE *out) {
   // 'var' type varName (',' varName)* ';'
-  fprintf(out, "<varDec>\n");
+  if (t->type == KEYWORD && t->data.keyword == VAR) {
+    fprintf(out, "<varDec>\n<keyword>var</keyword>\n");
+    t = t->next;
+
+    if ((t->type == KEYWORD &&
+         (t->data.keyword == INT || t->data.keyword == CHAR ||
+          t->data.keyword == BOOLEAN)) ||
+        (t->type == IDENTIFIER)) {
+      if (t->type == KEYWORD)
+        fprintf(out, "<keyword>%s</keyword>\n", keywords[t->data.keyword]);
+      else
+        fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+      t = t->next;
+
+      if (t->type == IDENTIFIER) {
+        fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+        t = t->next;
+
+        while (true) {
+          if (t->type != SYMBOL || t->data.symbol != ',')
+            break;
+          fprintf(out, "<symbol>,</symbol>\n");
+          t = t->next;
+
+          if (t->type == IDENTIFIER) {
+            fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+            t = t->next;
+          } else {
+            errno = PARSING_ERROR;
+            break;
+          }
+        }
+
+        if (t->type == SYMBOL && t->data.symbol == ';') {
+          fprintf(out, "<symbol>;</symbol>\n");
+          t = t->next;
+
+        } else
+          errno = PARSING_ERROR;
+      } else
+        errno = PARSING_ERROR;
+    } else
+      errno = PARSING_ERROR;
+    fprintf(out, "</varDec>\n");
+  } else
+    errno = PARSING_ERROR;
   if (errno) {
     fprintf(stderr, "[%zu:%zu] Syntax error: invalid variable declaration\n",
             t->lineN, t->lineP);
+    errno = 0;
   }
-  fprintf(out, "</varDec>\n");
-  return t;
-}
-// compStatements {{{2
-Token *compStatements(Token *t, FILE *out) {
-  // statement*
-  fprintf(out, "<statements>\n");
-  if (errno) {
-    fprintf(stderr, "[%zu:%zu] Syntax error: invalid statement\n", t->lineN,
-            t->lineP);
-  }
-  fprintf(out, "</statements>\n");
   return t;
 }
 // compParameterList {{{2
 Token *compParameterList(Token *t, FILE *out) {
   // ((type varName) (',' type varName)*)?
-  fprintf(out, "<parameterList>\n");
-  if (errno) {
-    fprintf(stderr, "[%zu:%zu] Syntax error: invalid parameter\n", t->lineN,
-            t->lineP);
+  if ((t->type == KEYWORD &&
+       (t->data.keyword == INT || t->data.keyword == CHAR ||
+        t->data.keyword == BOOLEAN)) ||
+      (t->type == IDENTIFIER)) {
+    if (t->type == KEYWORD)
+      fprintf(out, "<parameterList><keyword>%s</keyword>\n",
+              keywords[t->data.keyword]);
+    else
+      fprintf(out, "<parameterList><identifier>%s</identifier>\n",
+              t->data.strVal);
+    t = t->next;
+
+    if (t->type == IDENTIFIER) {
+      fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+      t = t->next;
+
+      while (t->type == SYMBOL && t->data.symbol == ',') {
+        fprintf(out, "<symbol>,</symbol>\n");
+        t = t->next;
+
+        if ((t->type == KEYWORD &&
+             (t->data.keyword == INT || t->data.keyword == CHAR ||
+              t->data.keyword == BOOLEAN)) ||
+            (t->type == IDENTIFIER)) {
+          if (t->type == KEYWORD)
+            fprintf(out, "<keyword>%s</keyword>\n", keywords[t->data.keyword]);
+          else
+            fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+          t = t->next;
+
+          if (t->type == IDENTIFIER) {
+            fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+            t = t->next;
+
+          } else {
+            errno = PARSING_ERROR;
+            break;
+          }
+
+        } else {
+          errno = PARSING_ERROR;
+          break;
+        }
+      }
+
+    } else
+      errno = PARSING_ERROR;
+    fprintf(out, "</parameterList>\n");
   }
-  fprintf(out, "</parameterList>\n");
+  if (errno) {
+    fprintf(stderr, "[%zu:%zu] Syntax error: invalid parameters\n", t->lineN,
+            t->lineP);
+    errno = 0;
+  }
   return t;
 }
 // compSubroutine {{{2
