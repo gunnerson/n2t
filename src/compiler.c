@@ -327,7 +327,98 @@ TokenList *tokenize_file(FILE *file) {
   return tl;
 }
 // compilation engine {{{1
-// compVarDec{{{2
+// compExpressionList {{{2
+Token *compExpressionList(Token *t, FILE *out) {
+  // (expression (',' expression)* )?
+  fprintf(out, "<expressionList>\n");
+  if (errno) {
+    fprintf(stderr, "[%zu:%zu] Syntax error: invalid expression list\n",
+            t->lineN, t->lineP);
+  }
+  fprintf(out, "</expressionList>\n");
+  return t;
+}
+// compTerm {{{2
+Token *compTerm(Token *t, FILE *out) {
+  /*   integerConstant | stringConstant | keywordConstant |
+   * varName | varName '[' expression ']' | subroutineCall |
+   * '(' expression ')' | unaryOp term */
+  fprintf(out, "<term>\n");
+  if (errno) {
+    fprintf(stderr, "[%zu:%zu] Syntax error: invalid term statement\n",
+            t->lineN, t->lineP);
+  }
+  fprintf(out, "<term>\n");
+  return t;
+}
+// compExpression {{{2
+Token *compExpression(Token *t, FILE *out) {
+  // term (op term)*
+  fprintf(out, "<expression>\n");
+  if (errno) {
+    fprintf(stderr, "[%zu:%zu] Syntax error: invalid expression\n", t->lineN,
+            t->lineP);
+  }
+  fprintf(out, "</expression>\n");
+  return t;
+}
+// compReturn {{{2
+Token *compReturn(Token *t, FILE *out) {
+  // 'return' expression? ';'
+  fprintf(out, "<returnStatement>\n");
+  if (errno) {
+    fprintf(stderr, "[%zu:%zu] Syntax error: invalid return statement\n",
+            t->lineN, t->lineP);
+  }
+  fprintf(out, "</returnStatement>\n");
+  return t;
+}
+// compWhile {{{2
+Token *compWhile(Token *t, FILE *out) {
+  // 'while' '(' expression ')' '{' statements '}'
+  fprintf(out, "<whileStatement>\n");
+  if (errno) {
+    fprintf(stderr, "[%zu:%zu] Syntax error: invalid while statement\n",
+            t->lineN, t->lineP);
+  }
+  fprintf(out, "</whileStatement>\n");
+  return t;
+}
+// compIf {{{2
+Token *compIf(Token *t, FILE *out) {
+  /*   'if' '(' expression ')' '{' statements '}'
+   * ('else' '{' statements '}')? */
+  fprintf(out, "<ifStatement>\n");
+  if (errno) {
+    fprintf(stderr, "[%zu:%zu] Syntax error: invalid if statement\n", t->lineN,
+            t->lineP);
+  }
+  fprintf(out, "</ifStatement>\n");
+  return t;
+}
+// compLet {{{2
+Token *compLet(Token *t, FILE *out) {
+  // 'let' varName ('[' expression ']')? '=' expression ';'
+  fprintf(out, "<letStatement>\n");
+  if (errno) {
+    fprintf(stderr, "[%zu:%zu] Syntax error: invalid let statement\n", t->lineN,
+            t->lineP);
+  }
+  fprintf(out, "</letStatement>\n");
+  return t;
+}
+// compDo {{{2
+Token *compDo(Token *t, FILE *out) {
+  // 'do' subroutineCall ';'
+  fprintf(out, "<doStatement>\n");
+  if (errno) {
+    fprintf(stderr, "[%zu:%zu] Syntax error: invalid do statement\n", t->lineN,
+            t->lineP);
+  }
+  fprintf(out, "</doStatement>\n");
+  return t;
+}
+// compVarDec {{{2
 Token *compVarDec(Token *t, FILE *out) {
   // 'var' type varName (',' varName)* ';'
   fprintf(out, "<varDec>\n");
@@ -496,62 +587,54 @@ Token *compClassVarDec(Token *t, FILE *out) {
 void compClass(Token *t, FILE *out) {
   //'class' className '{' classVarDec* subroutineDec* '}'
   Token *n;
-  fprintf(out, "<class>\n<keyword>class</keyword>\n");
-  if (t->type == IDENTIFIER) {
-    fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+  if (t->type == KEYWORD && t->data.keyword == CLASS) {
+    fprintf(out, "<class>\n<keyword>class</keyword>\n");
     t = t->next;
 
-    if (t->type == SYMBOL && t->data.symbol == '{') {
-      fprintf(out, "<symbol>{</symbol>\n");
+    if (t->type == IDENTIFIER) {
+      fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
       t = t->next;
 
-      while (true) {
-        n = compClassVarDec(t, out);
-        if (n == t)
-          break;
-        t = n;
-      }
+      if (t->type == SYMBOL && t->data.symbol == '{') {
+        fprintf(out, "<symbol>{</symbol>\n");
+        t = t->next;
 
-      while (true) {
-        n = compSubroutine(t, out);
-        if (n == t)
-          break;
-        t = n;
-      }
+        while (true) {
+          n = compClassVarDec(t, out);
+          if (n == t)
+            break;
+          t = n;
+        }
 
-      if (t->type == SYMBOL && t->data.symbol == '}') {
-        fprintf(out, "<symbol>}</symbol>\n");
+        while (true) {
+          n = compSubroutine(t, out);
+          if (n == t)
+            break;
+          t = n;
+        }
 
+        if (t->type == SYMBOL && t->data.symbol == '}') {
+          fprintf(out, "<symbol>}</symbol>\n");
+
+        } else
+          errno = PARSING_ERROR;
       } else
         errno = PARSING_ERROR;
     } else
       errno = PARSING_ERROR;
+    fprintf(out, "</class>\n");
   } else
     errno = PARSING_ERROR;
   if (errno) {
-    fprintf(stderr, "[%zu:%zu] Syntax error: invalid class definition\n",
-            t->lineN, t->lineP);
-    errno = 0;
-  }
-  fprintf(out, "</class>\n");
-}
-// parse_tokens {{{2
-void parse_tokens(TokenList *tl, FILE *out) {
-  Token *t = tl->head;
-  if (t->type == KEYWORD && t->data.keyword == CLASS) {
-    compClass(t->next, out);
-  } else {
-    fprintf(stderr,
-            "[%zu:%zu] Syntax error: file should start with class definition\n",
-            t->lineN, t->lineP);
+    fprintf(stderr, "[%zu:%zu] Syntax error: invalid class\n", t->lineN,
+            t->lineP);
     errno = 0;
   }
 }
 // handle_file {{{1
 void handle_file(FILE *in, FILE *out) {
   TokenList *tl = tokenize_file(in);
-  // token_list_dump(tl);
-  parse_tokens(tl, out);
+  compClass(tl->head, out);
   token_list_del(tl);
 }
 // main {{{1
