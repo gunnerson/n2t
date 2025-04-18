@@ -1087,7 +1087,7 @@ int main(int argc, char *argv[]) {
     if (file) {
       char *dot = strrchr(path, '.');
       if (dot && !strcmp(dot, ".jack")) {
-        strcpy(dot, "_my.xml");
+        strcpy(dot, ".xml");
         FILE *ofile = fopen(path, "w");
         if (ofile) {
           handle_file(file, ofile);
@@ -1115,7 +1115,7 @@ int main(int argc, char *argv[]) {
                        entry->d_name);
               FILE *file = fopen(file_path, "r");
               if (file) {
-                strcpy(dot, "_my.xml");
+                strcpy(dot, ".xml");
                 snprintf(file_path, PATH_MAX, "%s%c%s", path, SLASH,
                          entry->d_name);
                 FILE *ofile = fopen(file_path, "w");
