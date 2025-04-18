@@ -371,22 +371,25 @@ Token *compTerm(Token *t, FILE *out) {
    * varName | varName '[' expression ']' | subroutineCall |
    * '(' expression ')' | unaryOp term */
   Token *prev;
-  fprintf(out, "<term>\n");
   if (t->type == INT_CONST) {
-    fprintf(out, "%d\n", t->data.intVal);
+    fprintf(out, "<term>\n<integerConstant>%d</integerConstant>\n</term>\n",
+            t->data.intVal);
     t = t->next;
 
   } else if (t->type == STR_CONST) {
-    fprintf(out, "%s\n", t->data.strVal);
+    fprintf(out, "<term>\n<stringConstant>%s</stringConstant>\n</term>\n",
+            t->data.strVal);
     t = t->next;
 
   } else if (t->type == KEYWORD &&
              (t->data.keyword == TRUE || t->data.keyword == FALSE ||
               t->data.keyword == NUL || t->data.keyword == THIS)) {
-    fprintf(out, "%s\n", keywords[t->data.keyword]);
+    fprintf(out, "<term>\n<keyword>%s</keyword>\n</term>\n",
+            keywords[t->data.keyword]);
     t = t->next;
 
   } else if (t->type == IDENTIFIER) {
+    fprintf(out, "<term>\n");
     prev = t;
     t = t->next;
 
@@ -411,9 +414,10 @@ Token *compTerm(Token *t, FILE *out) {
     } else {
       fprintf(out, "<identifier>%s</identifier>\n", prev->data.strVal);
     }
+    fprintf(out, "</term>\n");
 
   } else if (t->type == SYMBOL && t->data.symbol == '(') {
-    fprintf(out, "<symbol>(</symbol>\n");
+    fprintf(out, "<term>\n<symbol>(</symbol>\n");
     t = t->next;
 
     t = compExpression(t, out);
@@ -424,42 +428,68 @@ Token *compTerm(Token *t, FILE *out) {
 
     } else
       errno = PARSING_ERROR;
+    fprintf(out, "</term>\n");
+
   } else if (t->type == SYMBOL &&
              (t->data.symbol == '-' || t->data.symbol == '~')) {
-    fprintf(out, "<symbol>%c</symbol>\n", t->data.symbol);
+    fprintf(out, "<term>\n<symbol>%c</symbol>\n", t->data.symbol);
     t = t->next;
 
     t = compTerm(t, out);
+
+    fprintf(out, "</term>\n");
   }
   if (errno) {
     fprintf(stderr, "[%zu:%zu] Syntax error: invalid term\n", t->lineN,
             t->lineP);
     errno = 0;
   }
-  fprintf(out, "</term>\n");
   return t;
 }
 // compExpression {{{2
 Token *compExpression(Token *t, FILE *out) {
   // term (op term)*
-  fprintf(out, "<expression>\n");
-
-  t = compTerm(t, out);
-
-  while (t->type == SYMBOL && (t->data.symbol == '+' || t->data.symbol == '-' ||
-                               t->data.symbol == '*' || t->data.symbol == '/' ||
-                               t->data.symbol == '&' || t->data.symbol == '|' ||
-                               t->data.symbol == '<' || t->data.symbol == '>' ||
-                               t->data.symbol == '=')) {
-    fprintf(out, "<symbol>%c</symbol>\n", t->data.symbol);
-    t = t->next;
-
-    if (t->type == SYMBOL && t->data.symbol == '=') {
-      fprintf(out, "<symbol>=</symbol>\n");
-      t = t->next;
-    }
+  if ((t->type == INT_CONST) || (t->type == STR_CONST) ||
+      ((t->type == KEYWORD &&
+        (t->data.keyword == TRUE || t->data.keyword == FALSE ||
+         t->data.keyword == NUL || t->data.keyword == THIS))) ||
+      (t->type == IDENTIFIER) || (t->type == SYMBOL && t->data.symbol == '(') ||
+      (t->type == SYMBOL && (t->data.symbol == '-' || t->data.symbol == '~'))) {
+    fprintf(out, "<expression>\n");
 
     t = compTerm(t, out);
+
+    while (t->type == SYMBOL &&
+           (t->data.symbol == '+' || t->data.symbol == '-' ||
+            t->data.symbol == '*' || t->data.symbol == '/' ||
+            t->data.symbol == '&' || t->data.symbol == '|' ||
+            t->data.symbol == '<' || t->data.symbol == '>' ||
+            t->data.symbol == '=')) {
+
+      switch (t->data.symbol) {
+      case '<':
+        fprintf(out, "<symbol>&lt;");
+        break;
+      case '>':
+        fprintf(out, "<symbol>&gt;");
+        break;
+      case '&':
+        fprintf(out, "<symbol>&amp;");
+        break;
+      default:
+        fprintf(out, "<symbol>%c", t->data.symbol);
+      }
+      t = t->next;
+
+      if (t->type == SYMBOL && t->data.symbol == '=') {
+        fprintf(out, "=</symbol>\n");
+        t = t->next;
+      } else
+        fprintf(out, "</symbol>\n");
+
+      t = compTerm(t, out);
+    }
+    fprintf(out, "</expression>\n");
   }
 
   if (errno) {
@@ -467,13 +497,12 @@ Token *compExpression(Token *t, FILE *out) {
             t->lineP);
     errno = 0;
   }
-  fprintf(out, "</expression>\n");
   return t;
 }
 // compReturn {{{2
 Token *compReturn(Token *t, FILE *out) {
   // 'return' expression? ';'
-  fprintf(out, "<keyword>return</keyword>\n<returnStatement>\n");
+  fprintf(out, "<returnStatement>\n<keyword>return</keyword>\n");
 
   t = compExpression(t, out);
 
@@ -495,7 +524,7 @@ Token *compReturn(Token *t, FILE *out) {
 // compWhile {{{2
 Token *compWhile(Token *t, FILE *out) {
   // 'while' '(' expression ')' '{' statements '}'
-  fprintf(out, "<keyword>while</keyword>\n<whileStatement>\n");
+  fprintf(out, "<whileStatement>\n<keyword>while</keyword>\n");
   if (t->type == SYMBOL && t->data.symbol == '(') {
     fprintf(out, "<symbol>(</symbol>\n");
     t = t->next;
@@ -536,7 +565,7 @@ Token *compWhile(Token *t, FILE *out) {
 Token *compIf(Token *t, FILE *out) {
   /*   'if' '(' expression ')' '{' statements '}'
    * ('else' '{' statements '}')? */
-  fprintf(out, "<keyword>if</keyword>\n<ifStatement>\n");
+  fprintf(out, "<ifStatement>\n<keyword>if</keyword>\n");
   if (t->type == SYMBOL && t->data.symbol == '(') {
     fprintf(out, "<symbol>(</symbol>\n");
     t = t->next;
@@ -595,7 +624,7 @@ Token *compIf(Token *t, FILE *out) {
 // compLet {{{2
 Token *compLet(Token *t, FILE *out) {
   // 'let' varName ('[' expression ']')? '=' expression ';'
-  fprintf(out, "<keyword>let</keyword>\n<letStatement>\n");
+  fprintf(out, "<letStatement>\n<keyword>let</keyword>\n");
   if (t->type == IDENTIFIER) {
     fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
     t = t->next;
@@ -684,7 +713,7 @@ Token *compSubroutineCall(Token *t, FILE *out) {
 // compDo {{{2
 Token *compDo(Token *t, FILE *out) {
   // 'do' subroutineCall ';'
-  fprintf(out, "<keyword>do</keyword>\n<doStatement>\n");
+  fprintf(out, "<doStatement>\n<keyword>do</keyword>\n");
 
   t = compSubroutineCall(t, out);
 
@@ -813,16 +842,15 @@ Token *compVarDec(Token *t, FILE *out) {
 // compParameterList {{{2
 Token *compParameterList(Token *t, FILE *out) {
   // ((type varName) (',' type varName)*)?
+  fprintf(out, "<parameterList>\n");
   if ((t->type == KEYWORD &&
        (t->data.keyword == INT || t->data.keyword == CHAR ||
         t->data.keyword == BOOLEAN)) ||
       (t->type == IDENTIFIER)) {
     if (t->type == KEYWORD)
-      fprintf(out, "<parameterList><keyword>%s</keyword>\n",
-              keywords[t->data.keyword]);
+      fprintf(out, "<keyword>%s</keyword>\n", keywords[t->data.keyword]);
     else
-      fprintf(out, "<parameterList><identifier>%s</identifier>\n",
-              t->data.strVal);
+      fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
     t = t->next;
 
     if (t->type == IDENTIFIER) {
@@ -860,8 +888,8 @@ Token *compParameterList(Token *t, FILE *out) {
 
     } else
       errno = PARSING_ERROR;
-    fprintf(out, "</parameterList>\n");
   }
+  fprintf(out, "</parameterList>\n");
   if (errno) {
     fprintf(stderr, "[%zu:%zu] Syntax error: invalid parameters\n", t->lineN,
             t->lineP);
@@ -906,7 +934,7 @@ Token *compSubroutine(Token *t, FILE *out) {
             t = t->next;
 
             if (t->type == SYMBOL && t->data.symbol == '{') {
-              fprintf(out, "<symbol>{</symbol>\n");
+              fprintf(out, "<subroutineBody>\n<symbol>{</symbol>\n");
               t = t->next;
 
               while (true) {
@@ -919,7 +947,7 @@ Token *compSubroutine(Token *t, FILE *out) {
               t = compStatements(t, out);
 
               if (t->type == SYMBOL && t->data.symbol == '}') {
-                fprintf(out, "<symbol>}</symbol>\n");
+                fprintf(out, "<symbol>}</symbol>\n</subroutineBody>\n");
                 t = t->next;
 
               } else
