@@ -22,6 +22,9 @@
 #define DT_UNKNOWN 0
 #define SLASH '/'
 #define PARSING_ERROR 1001
+#define INITIAL_CAPACITY 16
+#define FNV_OFFSET 14695981039346656037UL
+#define FNV_PRIME 1099511628211UL
 
 #define STACK_ADDRESS 256UCLASS, METHOD, FUNCTION,
 
@@ -87,7 +90,7 @@ char const *const keywords[keyword_num] = {[CLASS] = "class",
 typedef union {
   Keyword keyword;
   char symbol;
-  unsigned intVal;
+  int intVal;
   char *strVal;
 } TokenData;
 
@@ -128,7 +131,7 @@ bool is_identifier(char const *str) {
     return false;
   return true;
 }
-// data structures {{{2
+// token list {{{2
 typedef struct Token {
   TokenType type;
   TokenData data;
@@ -149,6 +152,10 @@ void add_token(TokenList *t, TokenType const type, TokenData const data,
   Token *new = malloc(sizeof(Token));
   if (new) {
     new->type = type;
+    new->data.keyword = -1;
+    new->data.symbol = '\0';
+    new->data.intVal = -1;
+    new->data.strVal = "";
     switch (type) {
     case KEYWORD:
       new->data.keyword = data.keyword;
@@ -326,6 +333,183 @@ TokenList *tokenize_file(FILE *file) {
   }
   return tl;
 }
+// symbol-table {{{1
+// declarations {{{2
+typedef enum {
+  FIELD_,
+  STATIC_,
+  LOCAL_,
+  ARGUMENT_,
+  sk_num,
+} SymbolKind;
+
+char const *const symbol_kind[sk_num] = {
+    [FIELD_] = "field",
+    [STATIC_] = "static",
+    [LOCAL_] = "local",
+    [ARGUMENT_] = "argument",
+};
+
+typedef struct {
+  const char *name;
+  const char *type;
+  SymbolKind kind;
+  size_t idx;
+} Symbol;
+typedef struct {
+  Symbol *entries;
+  size_t capacity;
+  size_t length;
+  size_t field_idx;
+  size_t static_idx;
+  size_t local_idx;
+  size_t argument_idx;
+} SymbolTable;
+// st_new {{{2
+SymbolTable *st_new(void) {
+  SymbolTable *self = malloc(sizeof(SymbolTable));
+  if (self == NULL) {
+    perror("Failed to allocate memory!");
+    return NULL;
+  }
+  self->length = 0;
+  self->field_idx = 0;
+  self->static_idx = 0;
+  self->local_idx = 0;
+  self->argument_idx = 0;
+  self->capacity = INITIAL_CAPACITY;
+  self->entries = calloc(self->capacity, sizeof(Symbol));
+  if (self->entries == NULL) {
+    perror("Failed to allocate memory!");
+    free(self);
+    return NULL;
+  }
+  return self;
+}
+// st_del {{{2
+void st_del(SymbolTable *self) {
+  for (size_t i = 0; i < self->capacity; i++) {
+    free((void *)self->entries[i].name);
+  }
+  free(self->entries);
+  free(self);
+}
+// st_hash {{{2
+static uint64_t st_hash(const char *key) {
+  uint64_t hash = FNV_OFFSET;
+  for (const char *p = key; *p; p++) {
+    hash ^= (uint64_t)(unsigned char)(*p);
+    hash *= FNV_PRIME;
+  }
+  return hash;
+}
+// st_get {{{2
+Symbol *st_get(SymbolTable *self, const char *name) {
+  uint64_t hash = st_hash(name);
+  size_t index = (size_t)(hash & (uint64_t)(self->capacity - 1));
+  while (self->entries[index].name) {
+    if (!strcmp(name, self->entries[index].name)) {
+      return &self->entries[index];
+    }
+    index++;
+    if (index >= self->capacity) {
+      index = 0;
+    }
+  }
+  return NULL;
+}
+// st_set_entry {{{2
+void st_set_entry(Symbol *entries, size_t capacity, const char *name,
+                  const char *type, SymbolKind kind, unsigned idx,
+                  size_t *length_ptr) {
+  uint64_t hash = st_hash(name);
+  size_t index = (size_t)(hash & (uint64_t)(capacity - 1));
+  while (entries[index].name) {
+    if (!strcmp(name, entries[index].name)) {
+      return;
+    }
+    index++;
+    if (index >= capacity) {
+      index = 0;
+    }
+  }
+  if (length_ptr != NULL) {
+    name = strdup(name);
+    if (name == NULL) {
+      perror("Failed to allocate memory!");
+      return;
+    }
+    (*length_ptr)++;
+  }
+  type = strdup(type);
+  if (type == NULL) {
+    perror("Failed to allocate memory!");
+    free((char *)name);
+    return;
+  }
+  entries[index].name = (char *)name;
+  entries[index].type = (char *)type;
+  entries[index].kind = kind;
+  entries[index].idx = idx;
+  return;
+}
+// st_expand {{{2
+static bool st_expand(SymbolTable *self) {
+  size_t new_capacity = self->capacity * 2;
+  if (new_capacity < self->capacity) {
+    return false;
+  }
+  Symbol *new_entries = calloc(new_capacity, sizeof(Symbol));
+  if (new_entries == NULL) {
+    perror("Failed to allocate memory!");
+    return false;
+  }
+  for (size_t i = 0; i < self->capacity; i++) {
+    Symbol entry = self->entries[i];
+    if (entry.name != NULL) {
+      st_set_entry(new_entries, new_capacity, entry.name, entry.type,
+                   entry.kind, entry.idx, NULL);
+    }
+  }
+  free(self->entries);
+  self->entries = new_entries;
+  self->capacity = new_capacity;
+  return true;
+}
+// st_set {{{2
+void st_set(SymbolTable *self, const char *name, const char *type,
+            SymbolKind kind) {
+  unsigned idx;
+  if (self->length >= self->capacity / 2) {
+    if (!st_expand(self)) {
+      return;
+    }
+  }
+  switch (kind) {
+  case FIELD_:
+    idx = self->field_idx;
+    self->field_idx++;
+    break;
+  case STATIC_:
+    idx = self->static_idx;
+    self->static_idx++;
+    break;
+  case LOCAL_:
+    idx = self->local_idx;
+    self->local_idx++;
+    break;
+  case ARGUMENT_:
+    idx = self->argument_idx;
+    self->argument_idx++;
+    break;
+  default:
+    idx = 0;
+  }
+
+  st_set_entry(self->entries, self->capacity, name, type, kind, idx,
+               &self->length);
+  return;
+}
 // compilation engine {{{1
 // prototypes {{{2
 Token *compExpressionList(Token *t, FILE *out);
@@ -343,6 +527,8 @@ Token *compParameterList(Token *t, FILE *out);
 Token *compSubroutine(Token *t, FILE *out);
 Token *compClassVarDec(Token *t, FILE *out);
 void compClass(Token *t, FILE *out);
+const char className[MAX_LINE_LENGTH];
+SymbolTable *cst;
 // compExpressionList {{{2
 Token *compExpressionList(Token *t, FILE *out) {
   // (expression (',' expression)* )?
@@ -737,7 +923,7 @@ Token *compStatements(Token *t, FILE *out) {
    * doStatement | returnStatement)* */
   Token *n;
   fprintf(out, "<statements>\n");
-  while (true) {
+  for (;;) {
     if (t->type == KEYWORD && t->data.keyword == DO) {
       t = t->next;
       n = compDo(t, out);
@@ -805,7 +991,7 @@ Token *compVarDec(Token *t, FILE *out) {
         fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
         t = t->next;
 
-        while (true) {
+        for (;;) {
           if (t->type != SYMBOL || t->data.symbol != ',')
             break;
           fprintf(out, "<symbol>,</symbol>\n");
@@ -902,11 +1088,19 @@ Token *compSubroutine(Token *t, FILE *out) {
   /* 'constructor' | 'function' | 'method') ('void' | type) subroutineName
    * '(' parameterList ')' subroutineBody */
   Token *n;
+  size_t nVars = 0;
+  const char fooType[MAX_LINE_LENGTH];
+  const char fooName[MAX_LINE_LENGTH];
+  SymbolTable *sst = st_new();
+  if (sst == NULL) {
+    perror("Allocation error");
+    return t;
+  }
   if (t->type == KEYWORD &&
       (t->data.keyword == CONSTRUCTOR || t->data.keyword == FUNCTION ||
        t->data.keyword == METHOD)) {
-    fprintf(out, "<subroutineDec>\n<keyword>%s</keyword>\n",
-            keywords[t->data.keyword]);
+    if (t->data.keyword == METHOD)
+      nVars++;
     t = t->next;
 
     if ((t->type == KEYWORD &&
@@ -914,30 +1108,27 @@ Token *compSubroutine(Token *t, FILE *out) {
           t->data.keyword == CHAR || t->data.keyword == BOOLEAN)) ||
         (t->type == IDENTIFIER)) {
       if (t->type == KEYWORD)
-        fprintf(out, "<keyword>%s</keyword>\n", keywords[t->data.keyword]);
+        strcpy((char *)fooType, keywords[t->data.keyword]);
       else
-        fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+        strcpy((char *)fooType, t->data.strVal);
       t = t->next;
 
       if (t->type == IDENTIFIER) {
-        fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+        strcpy((char *)fooName, t->data.strVal);
         t = t->next;
 
         if (t->type == SYMBOL && t->data.symbol == '(') {
-          fprintf(out, "<symbol>(</symbol>\n");
           t = t->next;
 
           t = compParameterList(t, out);
 
           if (t->type == SYMBOL && t->data.symbol == ')') {
-            fprintf(out, "<symbol>)</symbol>\n");
             t = t->next;
 
             if (t->type == SYMBOL && t->data.symbol == '{') {
-              fprintf(out, "<subroutineBody>\n<symbol>{</symbol>\n");
               t = t->next;
 
-              while (true) {
+              for (;;) {
                 n = compVarDec(t, out);
                 if (n == t)
                   break;
@@ -946,11 +1137,7 @@ Token *compSubroutine(Token *t, FILE *out) {
 
               t = compStatements(t, out);
 
-              if (t->type == SYMBOL && t->data.symbol == '}') {
-                fprintf(out, "<symbol>}</symbol>\n</subroutineBody>\n");
-                t = t->next;
-
-              } else
+              if (t->type != SYMBOL || t->data.symbol != '}')
                 errno = PARSING_ERROR;
             } else
               errno = PARSING_ERROR;
@@ -969,6 +1156,7 @@ Token *compSubroutine(Token *t, FILE *out) {
             t->lineN, t->lineP);
     errno = 0;
   }
+  st_del(sst);
   return t;
 }
 // compClassVarDec{{{2
@@ -994,7 +1182,7 @@ Token *compClassVarDec(Token *t, FILE *out) {
         fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
         t = t->next;
 
-        while (true) {
+        for (;;) {
           if (t->type != SYMBOL || t->data.symbol != ',')
             break;
           fprintf(out, "<symbol>,</symbol>\n");
@@ -1033,42 +1221,41 @@ Token *compClassVarDec(Token *t, FILE *out) {
 void compClass(Token *t, FILE *out) {
   //'class' className '{' classVarDec* subroutineDec* '}'
   Token *n;
+  SymbolTable *cst = st_new();
+  if (cst == NULL) {
+    perror("Allocation error");
+    return;
+  }
   if (t->type == KEYWORD && t->data.keyword == CLASS) {
-    fprintf(out, "<class>\n<keyword>class</keyword>\n");
     t = t->next;
 
     if (t->type == IDENTIFIER) {
-      fprintf(out, "<identifier>%s</identifier>\n", t->data.strVal);
+      strcpy((char *)className, t->data.strVal);
       t = t->next;
 
       if (t->type == SYMBOL && t->data.symbol == '{') {
-        fprintf(out, "<symbol>{</symbol>\n");
         t = t->next;
 
-        while (true) {
+        for (;;) {
           n = compClassVarDec(t, out);
           if (n == t)
             break;
           t = n;
         }
 
-        while (true) {
+        for (;;) {
           n = compSubroutine(t, out);
           if (n == t)
             break;
           t = n;
         }
 
-        if (t->type == SYMBOL && t->data.symbol == '}') {
-          fprintf(out, "<symbol>}</symbol>\n");
-
-        } else
+        if (t->data.symbol != '}')
           errno = PARSING_ERROR;
       } else
         errno = PARSING_ERROR;
     } else
       errno = PARSING_ERROR;
-    fprintf(out, "</class>\n");
   } else
     errno = PARSING_ERROR;
   if (errno) {
@@ -1076,6 +1263,7 @@ void compClass(Token *t, FILE *out) {
             t->lineP);
     errno = 0;
   }
+  st_del(cst);
 }
 // handle_file {{{1
 void handle_file(FILE *in, FILE *out) {
