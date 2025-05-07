@@ -1,0 +1,17 @@
+/** Initialize TouchType application */
+
+class Main {
+    function void main() {
+        var TouchType app;
+
+        let app = TouchType.new();
+        while (app.getExit() = false) {
+            do app.setup();
+            do app.run();
+            do app.score();
+        }
+        do app.dispose();
+
+        return;
+    }
+}
